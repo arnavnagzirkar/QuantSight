@@ -19,25 +19,25 @@ export function FactorExplorer() {
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-gray-900 dark:text-white mb-2">Factor Explorer</h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h1 className="text-3xl font-bold text-foreground mb-2">Factor Explorer</h1>
+          <p className="text-muted-foreground">
             Preview and analyze alpha factors with PCA diagnostics
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+          <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer">
             <input 
               type="checkbox" 
               checked={showPCA}
               onChange={(e) => setShowPCA(e.target.checked)}
-              className="rounded border-gray-300 dark:border-gray-600"
+              className="rounded border-border"
             />
             Show PCA Diagnostics
           </label>
           <button
             onClick={handleComputeFactors}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
           >
             {loading ? (
               <>
@@ -51,7 +51,7 @@ export function FactorExplorer() {
               </>
             )}
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+          <button className="flex items-center gap-2 px-4 py-2 border border-border text-foreground rounded-lg hover:bg-accent transition-colors shadow-sm">
             <Download className="w-4 h-4" />
             <span>Export</span>
           </button>
@@ -60,24 +60,24 @@ export function FactorExplorer() {
 
       {showPCA && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
-            <h3 className="text-gray-900 dark:text-white mb-4">PCA Explained Variance</h3>
+          <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-foreground mb-4">PCA Explained Variance</h3>
             <PCAChart />
           </div>
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
-            <h3 className="text-gray-900 dark:text-white mb-4">Factor Correlation Heatmap</h3>
+          <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-foreground mb-4">Factor Correlation Heatmap</h3>
             <CorrelationHeatmap />
           </div>
         </div>
       )}
 
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
+      <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-gray-900 dark:text-white">Factor Matrix</h2>
+          <h2 className="text-xl font-semibold text-foreground">Factor Matrix</h2>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">252 rows</span>
-            <span className="text-sm text-gray-600 dark:text-gray-400">•</span>
-            <span className="text-sm text-gray-600 dark:text-gray-400">24 columns</span>
+            <span className="text-sm text-muted-foreground">252 rows</span>
+            <span className="text-sm text-muted-foreground">•</span>
+            <span className="text-sm text-muted-foreground">24 columns</span>
           </div>
         </div>
         <FactorTable data={[
@@ -87,8 +87,8 @@ export function FactorExplorer() {
         ]} />
       </div>
 
-      <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-6">
-        <h3 className="text-gray-900 dark:text-white mb-4">Factor Definitions</h3>
+      <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
+        <h3 className="text-lg font-semibold text-foreground mb-4">Factor Definitions</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FactorDefinition 
             name="momentum_5d"
@@ -118,15 +118,15 @@ export function FactorExplorer() {
 
 function FactorDefinition({ name, formula, description }: { name: string; formula: string; description: string }) {
   return (
-    <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+    <div className="p-4 bg-accent rounded-lg">
       <div className="flex items-start gap-3">
-        <div className="p-2 bg-teal-100 dark:bg-teal-950 rounded-lg">
-          <FlaskConical className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+        <div className="p-2 bg-primary/10 rounded-lg">
+          <FlaskConical className="w-4 h-4 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-gray-900 dark:text-white mb-1">{name}</div>
-          <div className="text-xs font-mono text-gray-600 dark:text-gray-400 mb-2 break-all">{formula}</div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">{description}</div>
+          <div className="font-medium text-foreground mb-1">{name}</div>
+          <div className="text-xs font-mono text-muted-foreground mb-2 break-all">{formula}</div>
+          <div className="text-sm text-muted-foreground">{description}</div>
         </div>
       </div>
     </div>

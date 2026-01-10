@@ -65,8 +65,8 @@ export function RiskPerformance() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-gray-900 dark:text-white mb-2">Risk & Performance</h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h1 className="text-3xl font-bold text-foreground mb-2">Risk & Performance</h1>
+          <p className="text-muted-foreground">
             Comprehensive risk analytics and performance attribution
           </p>
         </div>
@@ -147,14 +147,14 @@ export function RiskPerformance() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <Card className="p-6">
-                <h2 className="text-gray-900 dark:text-white mb-6">Risk-Adjusted Returns</h2>
+                <h2 className="text-xl font-semibold text-foreground mb-6">Risk-Adjusted Returns</h2>
                 <EquityCurveChart />
               </Card>
             </div>
 
             <div className="space-y-6">
               <Card className="p-6">
-                <h3 className="text-gray-900 dark:text-white mb-4">Performance Summary</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-4">Performance Summary</h3>
                 <div className="space-y-3">
                   <MetricRow label="Total Return" value="+42.5%" positive />
                   <MetricRow label="CAGR" value="18.3%" />
@@ -166,7 +166,7 @@ export function RiskPerformance() {
               </Card>
 
               <Card className="p-6">
-                <h3 className="text-gray-900 dark:text-white mb-4">Risk Metrics</h3>
+                <h3 className="text-lg font-semibold text-foreground mb-4">Risk Metrics</h3>
                 <div className="space-y-3">
                   <MetricRow label="Annualized Vol" value="15.2%" />
                   <MetricRow label="Downside Dev" value="9.8%" />
@@ -179,14 +179,14 @@ export function RiskPerformance() {
           </div>
 
           <Card className="p-6">
-            <h2 className="text-gray-900 dark:text-white mb-6">Correlation Matrix</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-6">Correlation Matrix</h2>
             <CorrelationHeatmap />
           </Card>
         </TabsContent>
 
         <TabsContent value="drawdowns" className="space-y-6">
           <Card className="p-6">
-            <h2 className="text-gray-900 dark:text-white mb-6">Major Drawdown Periods</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-6">Major Drawdown Periods</h2>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -201,22 +201,22 @@ export function RiskPerformance() {
               <TableBody>
                 {mockDrawdowns.map((dd, idx) => (
                   <TableRow key={idx}>
-                    <TableCell className="text-gray-600 dark:text-gray-400">
+                    <TableCell className="text-muted-foreground">
                       {new Date(dd.start).toLocaleDateString()}
                     </TableCell>
-                    <TableCell className="text-gray-600 dark:text-gray-400">
+                    <TableCell className="text-muted-foreground">
                       {new Date(dd.end).toLocaleDateString()}
                     </TableCell>
-                    <TableCell className="text-red-600">
+                    <TableCell className="text-destructive">
                       {dd.depth.toFixed(1)}%
                     </TableCell>
-                    <TableCell className="text-gray-900 dark:text-white">
+                    <TableCell className="text-foreground">
                       {dd.length}
                     </TableCell>
-                    <TableCell className="text-gray-600 dark:text-gray-400">
+                    <TableCell className="text-muted-foreground">
                       {dd.recovery ? new Date(dd.recovery).toLocaleDateString() : 'Ongoing'}
                     </TableCell>
-                    <TableCell className="text-gray-900 dark:text-white">
+                    <TableCell className="text-foreground">
                       {dd.recovery 
                         ? Math.floor((new Date(dd.recovery).getTime() - new Date(dd.end).getTime()) / (1000 * 60 * 60 * 24)) + ' days'
                         : '-'
@@ -230,7 +230,7 @@ export function RiskPerformance() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="p-6">
-              <h3 className="text-gray-900 dark:text-white mb-4">Drawdown Statistics</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Drawdown Statistics</h3>
               <div className="space-y-3">
                 <MetricRow label="Max Drawdown" value="-12.4%" />
                 <MetricRow label="Avg Drawdown" value="-9.1%" />
@@ -241,8 +241,8 @@ export function RiskPerformance() {
             </Card>
 
             <Card className="p-6">
-              <h3 className="text-gray-900 dark:text-white mb-4">Underwater Chart</h3>
-              <div className="h-48 flex items-center justify-center text-gray-400">
+              <h3 className="text-lg font-semibold text-foreground mb-4">Underwater Chart</h3>
+              <div className="h-48 flex items-center justify-center text-muted-foreground">
                 Underwater drawdown visualization
               </div>
             </Card>
@@ -251,7 +251,7 @@ export function RiskPerformance() {
 
         <TabsContent value="risk-decomp" className="space-y-6">
           <Card className="p-6">
-            <h2 className="text-gray-900 dark:text-white mb-6">Risk Contribution by Position</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-6">Risk Contribution by Position</h2>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -267,28 +267,28 @@ export function RiskPerformance() {
               <TableBody>
                 {mockRiskContributions.map((risk) => (
                   <TableRow key={risk.ticker}>
-                    <TableCell className="text-gray-900 dark:text-white">
+                    <TableCell className="text-foreground">
                       {risk.ticker}
                     </TableCell>
-                    <TableCell className="text-gray-600 dark:text-gray-400">
+                    <TableCell className="text-muted-foreground">
                       {risk.weight.toFixed(1)}%
                     </TableCell>
-                    <TableCell className="text-gray-600 dark:text-gray-400">
+                    <TableCell className="text-muted-foreground">
                       {risk.volatility.toFixed(1)}%
                     </TableCell>
-                    <TableCell className="text-gray-900 dark:text-white">
+                    <TableCell className="text-foreground">
                       {risk.beta.toFixed(2)}
                     </TableCell>
-                    <TableCell className="text-gray-600 dark:text-gray-400">
+                    <TableCell className="text-muted-foreground">
                       {risk.varContribution.toFixed(1)}%
                     </TableCell>
-                    <TableCell className="text-gray-600 dark:text-gray-400">
+                    <TableCell className="text-muted-foreground">
                       {risk.marginalVar.toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Progress value={risk.varContribution} className="w-24" />
-                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                        <span className="text-sm text-muted-foreground">
                           {risk.varContribution.toFixed(0)}%
                         </span>
                       </div>
@@ -301,7 +301,7 @@ export function RiskPerformance() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="p-6">
-              <h3 className="text-gray-900 dark:text-white mb-4">Portfolio Composition</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Portfolio Composition</h3>
               <div className="space-y-3">
                 <MetricRow label="Number of Positions" value="15" />
                 <MetricRow label="Avg Position Size" value="6.7%" />
@@ -312,7 +312,7 @@ export function RiskPerformance() {
             </Card>
 
             <Card className="p-6">
-              <h3 className="text-gray-900 dark:text-white mb-4">Factor Exposures</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Factor Exposures</h3>
               <div className="space-y-3">
                 <FactorExposure label="Market" value={0.82} />
                 <FactorExposure label="Size" value={-0.15} />
@@ -326,7 +326,7 @@ export function RiskPerformance() {
 
         <TabsContent value="stress-test" className="space-y-6">
           <Card className="p-6">
-            <h2 className="text-gray-900 dark:text-white mb-6">Historical Stress Scenarios</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-6">Historical Stress Scenarios</h2>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -339,25 +339,25 @@ export function RiskPerformance() {
               <TableBody>
                 {mockStressScenarios.map((scenario, idx) => (
                   <TableRow key={idx}>
-                    <TableCell className="text-gray-900 dark:text-white">
+                    <TableCell className="text-foreground">
                       {scenario.name}
                     </TableCell>
-                    <TableCell className="text-red-600">
+                    <TableCell className="text-destructive">
                       {scenario.impact.toFixed(1)}%
                     </TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 rounded text-xs ${
                         scenario.probability === 'Medium'
-                          ? 'bg-yellow-100 dark:bg-yellow-950 text-yellow-700 dark:text-yellow-400'
-                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                          ? 'bg-chart-3/10 text-chart-3'
+                          : 'bg-muted text-muted-foreground'
                       }`}>
                         {scenario.probability}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <div className="w-32 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-red-500"
+                          className="h-full bg-destructive"
                           style={{ width: `${Math.abs(scenario.impact) / 35 * 100}%` }}
                         />
                       </div>
@@ -370,10 +370,10 @@ export function RiskPerformance() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="p-6">
-              <h3 className="text-gray-900 dark:text-white mb-4">Custom Stress Test</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Custom Stress Test</h3>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm text-gray-600 dark:text-gray-400">Market Shock (%)</label>
+                  <label className="text-sm text-muted-foreground">Market Shock (%)</label>
                   <input 
                     type="range" 
                     min="-50" 
@@ -381,10 +381,10 @@ export function RiskPerformance() {
                     defaultValue="-20"
                     className="w-full"
                   />
-                  <div className="text-sm text-gray-900 dark:text-white text-center">-20%</div>
+                  <div className="text-sm text-foreground text-center">-20%</div>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm text-gray-600 dark:text-gray-400">Volatility Multiplier</label>
+                  <label className="text-sm text-muted-foreground">Volatility Multiplier</label>
                   <input 
                     type="range" 
                     min="1" 
@@ -393,13 +393,13 @@ export function RiskPerformance() {
                     defaultValue="2"
                     className="w-full"
                   />
-                  <div className="text-sm text-gray-900 dark:text-white text-center">2.0x</div>
+                  <div className="text-sm text-foreground text-center">2.0x</div>
                 </div>
               </div>
             </Card>
 
             <Card className="p-6">
-              <h3 className="text-gray-900 dark:text-white mb-4">Stress Test Results</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Stress Test Results</h3>
               <div className="space-y-3">
                 <MetricRow label="Portfolio Impact" value="-18.5%" />
                 <MetricRow label="Expected Loss" value="$18,500" />
@@ -413,13 +413,13 @@ export function RiskPerformance() {
 
         <TabsContent value="attribution" className="space-y-6">
           <Card className="p-6">
-            <h2 className="text-gray-900 dark:text-white mb-6">Performance Attribution</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-6">Performance Attribution</h2>
             <AttributionChart />
           </Card>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="p-6">
-              <h3 className="text-gray-900 dark:text-white mb-4">Return Decomposition</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Return Decomposition</h3>
               <div className="space-y-3">
                 <MetricRow label="Total Return" value="+42.5%" positive />
                 <MetricRow label="Market Return" value="+28.3%" />
@@ -430,7 +430,7 @@ export function RiskPerformance() {
             </Card>
 
             <Card className="p-6">
-              <h3 className="text-gray-900 dark:text-white mb-4">Top Contributors</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-4">Top Contributors</h3>
               <div className="space-y-3">
                 <ContributorRow ticker="NVDA" contribution={8.5} />
                 <ContributorRow ticker="AAPL" contribution={6.2} />
@@ -453,14 +453,14 @@ function MetricRow({ label, value, positive, negative }: {
   negative?: boolean;
 }) {
   const colorClass = positive 
-    ? 'text-teal-600' 
+    ? 'text-chart-4' 
     : negative 
-    ? 'text-red-600' 
-    : 'text-gray-900 dark:text-white';
+    ? 'text-destructive' 
+    : 'text-foreground';
 
   return (
-    <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-800 last:border-0">
-      <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
+    <div className="flex items-center justify-between py-2 border-b border-border last:border-0">
+      <span className="text-sm text-muted-foreground">{label}</span>
       <span className={colorClass}>{value}</span>
     </div>
   );
@@ -473,18 +473,18 @@ function FactorExposure({ label, value }: { label: string; value: number }) {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-sm">
-        <span className="text-gray-600 dark:text-gray-400">{label}</span>
-        <span className="text-gray-900 dark:text-white">{value.toFixed(2)}</span>
+        <span className="text-muted-foreground">{label}</span>
+        <span className="text-foreground">{value.toFixed(2)}</span>
       </div>
-      <div className="relative h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+      <div className="relative h-2 bg-muted rounded-full overflow-hidden">
         <div 
-          className={`absolute h-full ${isPositive ? 'bg-teal-500' : 'bg-orange-500'}`}
+          className={`absolute h-full ${isPositive ? 'bg-chart-4' : 'bg-chart-3'}`}
           style={{ 
             left: isPositive ? '50%' : `${50 - percentage}%`,
             width: `${percentage}%`
           }}
         />
-        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-400" />
+        <div className="absolute left-1/2 top-0 bottom-0 w-px bg-muted-foreground/20" />
       </div>
     </div>
   );
@@ -492,16 +492,16 @@ function FactorExposure({ label, value }: { label: string; value: number }) {
 
 function ContributorRow({ ticker, contribution }: { ticker: string; contribution: number }) {
   return (
-    <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
-      <span className="text-gray-900 dark:text-white">{ticker}</span>
+    <div className="flex items-center justify-between p-2 bg-accent rounded">
+      <span className="text-foreground">{ticker}</span>
       <div className="flex items-center gap-2">
-        <div className="w-24 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+        <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
           <div 
-            className="h-full bg-teal-500"
+            className="h-full bg-chart-4"
             style={{ width: `${(contribution / 10) * 100}%` }}
           />
         </div>
-        <span className="text-sm text-teal-600 w-12 text-right">
+        <span className="text-sm text-chart-4 w-12 text-right">
           +{contribution.toFixed(1)}%
         </span>
       </div>

@@ -121,10 +121,10 @@ export function ExperimentManager() {
 
   const getStatusBadge = (status: Experiment['status']) => {
     const variants = {
-      draft: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300',
-      running: 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-400',
-      completed: 'bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-400',
-      failed: 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-400',
+      draft: 'bg-muted text-muted-foreground',
+      running: 'bg-chart-1/10 text-chart-1',
+      completed: 'bg-chart-4/10 text-chart-4',
+      failed: 'bg-destructive/10 text-destructive',
     };
 
     return (
@@ -138,8 +138,8 @@ export function ExperimentManager() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-gray-900 dark:text-white mb-2">Experiment Manager</h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h1 className="text-3xl font-bold text-foreground mb-2">Experiment Manager</h1>
+          <p className="text-muted-foreground">
             Track and compare model experiments with walk-forward validation
           </p>
         </div>
@@ -223,39 +223,39 @@ export function ExperimentManager() {
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Total Experiments</p>
-              <p className="text-gray-900 dark:text-white mt-1">{experiments.length}</p>
+              <p className="text-sm text-muted-foreground">Total Experiments</p>
+              <p className="text-2xl font-bold text-foreground mt-1">{experiments.length}</p>
             </div>
-            <GitBranch className="w-8 h-8 text-gray-400" />
+            <GitBranch className="w-8 h-8 text-muted-foreground" />
           </div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Running</p>
-              <p className="text-gray-900 dark:text-white mt-1">
+              <p className="text-sm text-muted-foreground">Running</p>
+              <p className="text-2xl font-bold text-foreground mt-1">
                 {experiments.filter(e => e.status === 'running').length}
               </p>
             </div>
-            <Play className="w-8 h-8 text-blue-400" />
+            <Play className="w-8 h-8 text-chart-1" />
           </div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Completed</p>
-              <p className="text-gray-900 dark:text-white mt-1">
+              <p className="text-sm text-muted-foreground">Completed</p>
+              <p className="text-2xl font-bold text-foreground mt-1">
                 {experiments.filter(e => e.status === 'completed').length}
               </p>
             </div>
-            <TrendingUp className="w-8 h-8 text-teal-400" />
+            <TrendingUp className="w-8 h-8 text-chart-4" />
           </div>
         </Card>
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-400">Avg Sharpe</p>
-              <p className="text-gray-900 dark:text-white mt-1">
+              <p className="text-sm text-muted-foreground">Avg Sharpe</p>
+              <p className="text-2xl font-bold text-foreground mt-1">
                 {(experiments
                   .filter(e => e.performance)
                   .reduce((acc, e) => acc + (e.performance?.sharpe || 0), 0) / 

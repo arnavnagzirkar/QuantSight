@@ -38,8 +38,8 @@ export function APIIntegrationExample() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-gray-900 dark:text-white mb-2">API Integration Example</h1>
-          <p className="text-gray-600 dark:text-gray-400">
+          <h1 className="text-3xl font-bold text-foreground mb-2">API Integration Example</h1>
+          <p className="text-muted-foreground">
             Reference implementation for connecting to Flask backend
           </p>
         </div>
@@ -51,7 +51,7 @@ export function APIIntegrationExample() {
 
       {/* Example 1: Display loading state */}
       <Card className="p-6">
-        <h2 className="text-gray-900 dark:text-white mb-4">Portfolio Overview</h2>
+        <h2 className="text-xl font-semibold text-foreground mb-4">Portfolio Overview</h2>
         
         {overview.loading && (
           <div className="space-y-3">
@@ -83,43 +83,43 @@ export function APIIntegrationExample() {
 
       {/* Example 2: Display signals data */}
       <Card className="p-6">
-        <h2 className="text-gray-900 dark:text-white mb-4">Recent Signals</h2>
+        <h2 className="text-xl font-semibold text-foreground mb-4">Recent Signals</h2>
         
         {signals.loading && <Skeleton className="h-32 w-full" />}
 
         {signals.error && (
-          <p className="text-red-600 text-sm">Error loading signals: {signals.error.message}</p>
+          <p className="text-destructive text-sm">Error loading signals: {signals.error.message}</p>
         )}
 
         {signals.data && (signals.data as any).length > 0 ? (
           <div className="space-y-2">
             {(signals.data as any).map((signal: any, idx: number) => (
-              <div key={idx} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div key={idx} className="flex items-center justify-between p-3 bg-accent rounded-lg">
                 <div className="flex items-center gap-3">
-                  <span className="text-gray-900 dark:text-white">{signal.ticker}</span>
+                  <span className="text-foreground">{signal.ticker}</span>
                   <span className={`px-2 py-0.5 rounded text-xs ${
                     signal.side === 'LONG'
-                      ? 'bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-400'
-                      : 'bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-400'
+                      ? 'bg-chart-4/10 text-chart-4'
+                      : 'bg-chart-3/10 text-chart-3'
                   }`}>
                     {signal.side}
                   </span>
                 </div>
-                <span className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="text-sm text-muted-foreground">
                   Confidence: {(signal.confidence * 100).toFixed(0)}%
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          !signals.loading && <p className="text-gray-600 dark:text-gray-400">No signals available</p>
+          !signals.loading && <p className="text-muted-foreground">No signals available</p>
         )}
       </Card>
 
       {/* Example 3: Load data on demand */}
       <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-gray-900 dark:text-white">Equity Curve</h2>
+          <h2 className="text-xl font-semibold text-foreground">Equity Curve</h2>
           <Button 
             onClick={handleLoadEquityCurve} 
             disabled={equityCurve.loading}
@@ -131,7 +131,7 @@ export function APIIntegrationExample() {
 
         {(equityCurve.data ? (
           <div className="space-y-2">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
+            <p className="text-sm text-muted-foreground">
               Data points: {(equityCurve.data as any).dates?.length || 0}
             </p>
             {/* Render your chart here with equityCurve.data */}
@@ -144,12 +144,12 @@ export function APIIntegrationExample() {
 
       {/* Code examples */}
       <Card className="p-6">
-        <h2 className="text-gray-900 dark:text-white mb-4">Code Examples</h2>
+        <h2 className="text-xl font-semibold text-foreground mb-4">Code Examples</h2>
         
         <div className="space-y-4">
           <div>
-            <h3 className="text-sm text-gray-900 dark:text-white mb-2">1. Basic Hook Usage</h3>
-            <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-xs overflow-x-auto">
+            <h3 className="text-sm text-foreground mb-2">1. Basic Hook Usage</h3>
+            <pre className="bg-card border border-border p-4 rounded-lg text-xs overflow-x-auto">
 {`import { useDashboard } from '../hooks/useAPI';
 
 function MyComponent() {

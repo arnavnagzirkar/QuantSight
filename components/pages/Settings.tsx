@@ -33,8 +33,8 @@ export function Settings() {
   return (
     <div className="space-y-6 max-w-6xl">
       <div>
-        <h1 className="text-gray-900 dark:text-white mb-2">Settings</h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <h1 className="text-3xl font-bold text-foreground mb-2">Settings</h1>
+        <p className="text-muted-foreground">
           Configure your research platform and data connections
         </p>
       </div>
@@ -51,8 +51,8 @@ export function Settings() {
         <TabsContent value="general" className="space-y-6">
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <Monitor className="w-5 h-5 text-gray-400" />
-              <h2 className="text-gray-900 dark:text-white">Appearance</h2>
+              <Monitor className="w-5 h-5 text-muted-foreground" />
+              <h2 className="text-xl font-semibold text-foreground">Appearance</h2>
             </div>
             
             <div className="space-y-6">
@@ -63,8 +63,8 @@ export function Settings() {
                     onClick={() => setTheme('light')}
                     className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-colors ${
                       theme === 'light'
-                        ? 'border-teal-500 bg-teal-50 dark:bg-teal-950'
-                        : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/50'
                     }`}
                   >
                     <Sun className="w-6 h-6" />
@@ -74,8 +74,8 @@ export function Settings() {
                     onClick={() => setTheme('dark')}
                     className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-colors ${
                       theme === 'dark'
-                        ? 'border-teal-500 bg-teal-50 dark:bg-teal-950'
-                        : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/50'
                     }`}
                   >
                     <Moon className="w-6 h-6" />
@@ -85,8 +85,8 @@ export function Settings() {
                     onClick={() => setTheme('system')}
                     className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-colors ${
                       theme === 'system'
-                        ? 'border-teal-500 bg-teal-50 dark:bg-teal-950'
-                        : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/50'
                     }`}
                   >
                     <Monitor className="w-6 h-6" />
@@ -133,8 +133,8 @@ export function Settings() {
 
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <User className="w-5 h-5 text-gray-400" />
-              <h2 className="text-gray-900 dark:text-white">User Preferences</h2>
+              <User className="w-5 h-5 text-muted-foreground" />
+              <h2 className="text-xl font-semibold text-foreground">User Preferences</h2>
             </div>
 
             <div className="space-y-4">
@@ -161,7 +161,7 @@ export function Settings() {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Compact Mode</Label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground">
                     Show more data in less space
                   </p>
                 </div>
@@ -174,8 +174,8 @@ export function Settings() {
         <TabsContent value="data" className="space-y-6">
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <Database className="w-5 h-5 text-gray-400" />
-              <h2 className="text-gray-900 dark:text-white">Backend API Connection</h2>
+              <Database className="w-5 h-5 text-muted-foreground" />
+              <h2 className="text-xl font-semibold text-foreground">Backend API Connection</h2>
             </div>
 
             <div className="space-y-4">
@@ -194,7 +194,7 @@ export function Settings() {
                     Test
                   </Button>
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Flask backend endpoint for all API calls
                 </p>
               </div>
@@ -211,7 +211,7 @@ export function Settings() {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Enable Request Caching</Label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground">
                     Cache API responses to reduce load times
                   </p>
                 </div>
@@ -222,18 +222,18 @@ export function Settings() {
 
           <Card className="p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-gray-900 dark:text-white">Market Data Providers</h3>
+              <h3 className="text-lg font-semibold text-foreground">Market Data Providers</h3>
               <Button variant="outline" size="sm">Add Provider</Button>
             </div>
 
             <div className="space-y-4">
-              <div className="p-4 border border-gray-200 dark:border-gray-800 rounded-lg">
+              <div className="p-4 border border-border rounded-lg">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-teal-500 rounded-full" />
+                    <div className="w-2 h-2 bg-chart-4 rounded-full" />
                     <div>
-                      <p className="text-gray-900 dark:text-white">Yahoo Finance</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Primary data source</p>
+                      <p className="text-foreground">Yahoo Finance</p>
+                      <p className="text-sm text-muted-foreground">Primary data source</p>
                     </div>
                   </div>
                   <Switch defaultChecked />
@@ -250,13 +250,13 @@ export function Settings() {
                 </div>
               </div>
 
-              <div className="p-4 border border-gray-200 dark:border-gray-800 rounded-lg">
+              <div className="p-4 border border-border rounded-lg">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-2 h-2 bg-gray-300 rounded-full" />
+                    <div className="w-2 h-2 bg-muted-foreground/50 rounded-full" />
                     <div>
-                      <p className="text-gray-900 dark:text-white">Alpha Vantage</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Alternative data source</p>
+                      <p className="text-foreground">Alpha Vantage</p>
+                      <p className="text-sm text-muted-foreground">Alternative data source</p>
                     </div>
                   </div>
                   <Switch />
@@ -270,7 +270,7 @@ export function Settings() {
           </Card>
 
           <Card className="p-6">
-            <h3 className="text-gray-900 dark:text-white mb-4">Data Refresh Settings</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">Data Refresh Settings</h3>
             
             <div className="space-y-4">
               <div className="space-y-2">
@@ -292,7 +292,7 @@ export function Settings() {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Cache Historical Data</Label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground">
                     Store historical data locally for faster access
                   </p>
                 </div>
@@ -304,7 +304,7 @@ export function Settings() {
 
         <TabsContent value="models" className="space-y-6">
           <Card className="p-6">
-            <h2 className="text-gray-900 dark:text-white mb-6">Model Training Defaults</h2>
+            <h2 className="text-xl font-semibold text-foreground mb-6">Model Training Defaults</h2>
             
             <div className="space-y-4">
               <div className="space-y-2">
@@ -342,7 +342,7 @@ export function Settings() {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Auto-Retrain Models</Label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground">
                     Automatically retrain models on schedule
                   </p>
                 </div>
@@ -352,13 +352,13 @@ export function Settings() {
           </Card>
 
           <Card className="p-6">
-            <h3 className="text-gray-900 dark:text-white mb-4">Compute Resources</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">Compute Resources</h3>
             
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="max-workers">Max Parallel Workers</Label>
                 <Input id="max-workers" type="number" defaultValue="4" />
-                <p className="text-sm text-gray-600 dark:text-gray-400">
+                <p className="text-sm text-muted-foreground">
                   Number of parallel jobs for model training
                 </p>
               </div>
@@ -371,7 +371,7 @@ export function Settings() {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>GPU Acceleration</Label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground">
                     Use GPU for faster training (if available)
                   </p>
                 </div>
@@ -384,45 +384,45 @@ export function Settings() {
         <TabsContent value="notifications" className="space-y-6">
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <Bell className="w-5 h-5 text-gray-400" />
-              <h2 className="text-gray-900 dark:text-white">Notification Preferences</h2>
+              <Bell className="w-5 h-5 text-muted-foreground" />
+              <h2 className="text-xl font-semibold text-foreground">Notification Preferences</h2>
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center justify-between py-3 border-b border-border">
                 <div>
                   <Label>Model Training Complete</Label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground">
                     Notify when model training finishes
                   </p>
                 </div>
                 <Switch defaultChecked />
               </div>
 
-              <div className="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center justify-between py-3 border-b border-border">
                 <div>
                   <Label>Signal Alerts</Label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground">
                     Notify on new high-confidence signals
                   </p>
                 </div>
                 <Switch defaultChecked />
               </div>
 
-              <div className="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center justify-between py-3 border-b border-border">
                 <div>
                   <Label>Risk Alerts</Label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground">
                     Notify when portfolio risk exceeds thresholds
                   </p>
                 </div>
                 <Switch defaultChecked />
               </div>
 
-              <div className="flex items-center justify-between py-3 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center justify-between py-3 border-b border-border">
                 <div>
                   <Label>Data Update Notifications</Label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground">
                     Notify when data refresh completes
                   </p>
                 </div>
@@ -432,7 +432,7 @@ export function Settings() {
               <div className="flex items-center justify-between py-3">
                 <div>
                   <Label>Experiment Results</Label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground">
                     Notify when experiments complete
                   </p>
                 </div>
@@ -442,7 +442,7 @@ export function Settings() {
           </Card>
 
           <Card className="p-6">
-            <h3 className="text-gray-900 dark:text-white mb-4">Email Notifications</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">Email Notifications</h3>
             
             <div className="space-y-4">
               <div className="space-y-2">
@@ -476,8 +476,8 @@ export function Settings() {
         <TabsContent value="security" className="space-y-6">
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-6">
-              <Shield className="w-5 h-5 text-gray-400" />
-              <h2 className="text-gray-900 dark:text-white">Security Settings</h2>
+              <Shield className="w-5 h-5 text-muted-foreground" />
+              <h2 className="text-xl font-semibold text-foreground">Security Settings</h2>
             </div>
 
             <div className="space-y-4">
@@ -501,13 +501,13 @@ export function Settings() {
           </Card>
 
           <Card className="p-6">
-            <h3 className="text-gray-900 dark:text-white mb-4">Session Management</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">Session Management</h3>
             
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Auto-logout</Label>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="text-sm text-muted-foreground">
                     Automatically log out after inactivity
                   </p>
                 </div>
@@ -522,25 +522,25 @@ export function Settings() {
           </Card>
 
           <Card className="p-6">
-            <h3 className="text-gray-900 dark:text-white mb-4">API Keys</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-4">API Keys</h3>
             
             <div className="space-y-4">
-              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="p-4 bg-accent rounded-lg">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-900 dark:text-white">Production API Key</span>
+                  <span className="text-sm text-foreground">Production API Key</span>
                   <Button variant="outline" size="sm">Regenerate</Button>
                 </div>
-                <code className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                <code className="text-xs text-muted-foreground font-mono">
                   sk_prod_xxxxxxxxxxxxxxxxxxxxxxxx
                 </code>
               </div>
 
-              <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+              <div className="p-4 bg-accent rounded-lg">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-900 dark:text-white">Development API Key</span>
+                  <span className="text-sm text-foreground">Development API Key</span>
                   <Button variant="outline" size="sm">Regenerate</Button>
                 </div>
-                <code className="text-xs text-gray-600 dark:text-gray-400 font-mono">
+                <code className="text-xs text-muted-foreground font-mono">
                   sk_dev_xxxxxxxxxxxxxxxxxxxxxxxx
                 </code>
               </div>

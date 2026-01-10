@@ -70,15 +70,15 @@ export function StrategyBacktest() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-gray-900 dark:text-white mb-2">Strategy Backtest</h1>
-        <p className="text-gray-600 dark:text-gray-400">
+        <h1 className="text-3xl font-bold text-foreground mb-2">Strategy Backtest</h1>
+        <p className="text-muted-foreground">
           Test trading strategies with historical data and analyze performance
         </p>
       </div>
 
       {/* Configuration Panel */}
       <Card className="p-6">
-        <h2 className="text-gray-900 dark:text-white mb-4">Backtest Configuration</h2>
+        <h2 className="text-xl font-semibold text-foreground mb-4">Backtest Configuration</h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-4">
             <div className="space-y-2">
