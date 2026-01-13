@@ -7,6 +7,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 from dotenv import load_dotenv
 
 from core.features import ta_features
@@ -21,6 +22,20 @@ from core.adapter_api import adapter_bp
 load_dotenv()
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+
+# Enable CORS for frontend
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "http://localhost:5173",  # Local development
+            "https://*.vercel.app",   # Vercel preview deployments
+            "https://your-domain.com" # Your production domain
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
+
 # Accept routes with or without trailing slashes (prevents 308 redirects)
 app.url_map.strict_slashes = False
 

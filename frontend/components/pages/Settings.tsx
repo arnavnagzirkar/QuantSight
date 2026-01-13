@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Save, Database, Bell, Shield, User, Moon, Sun, Monitor } from 'lucide-react';
+import { Save, Database, Bell, Shield, User, Moon, Sun, Monitor, LogOut } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -9,11 +9,27 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Separator } from '../ui/separator';
 import { useTheme } from '../ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '../ui/alert-dialog';
 
 export function Settings() {
   const { theme, setTheme } = useTheme();
+  const { signOut, user, profile } = useAuth();
+  const navigate = useNavigate();
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleSaveSettings = async () => {
     setIsSaving(true);
@@ -30,6 +46,19 @@ export function Settings() {
     toast.success(`${connectionType} connection successful`);
   };
 
+  const handleLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      await signOut();
+      toast.success('Logged out successfully');
+      navigate('/');
+    } catch (error) {
+      toast.error('Failed to log out');
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-6xl">
       <div>
@@ -42,11 +71,89 @@ export function Settings() {
       <Tabs defaultValue="general" className="space-y-6">
         <TabsList>
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="data">Data Sources</TabsTrigger>
           <TabsTrigger value="models">Models</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="account" className="space-y-6">
+          <Card className="p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <User className="w-5 h-5 text-muted-foreground" />
+              <h2 className="text-xl font-semibold text-foreground">Account Information</h2>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input value={user?.email || ''} disabled />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Full Name</Label>
+                <Input value={profile?.full_name || ''} disabled />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Username</Label>
+                <Input value={profile?.username || ''} disabled />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Use Case</Label>
+                <Input 
+                  value={profile?.use_case === 'personal' ? 'Personal Use' : 
+                         profile?.use_case === 'company' ? 'Company Use' : 
+                         profile?.use_case === 'student' ? 'Student/University/School Use' : ''} 
+                  disabled 
+                />
+              </div>
+
+              {profile?.use_case === 'company' && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Company Name</Label>
+                    <Input value={profile?.company_name || ''} disabled />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Role</Label>
+                    <Input value={profile?.role || ''} disabled />
+                  </div>
+                </>
+              )}
+
+              <Separator />
+
+              <div className="pt-4">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full sm:w-auto">
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign Out
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure you want to sign out?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        You will need to sign in again to access your QuantSight account.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleLogout} disabled={isLoggingOut}>
+                        {isLoggingOut ? 'Signing out...' : 'Sign Out'}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="general" className="space-y-6">
           <Card className="p-6">
