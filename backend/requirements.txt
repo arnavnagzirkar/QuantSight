@@ -10,6 +10,7 @@ numpy
 python-dotenv
 vaderSentiment
 scikit-learn
+statsmodels
 xgboost
 pydantic
 plotly
