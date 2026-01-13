@@ -5,6 +5,7 @@ yfinance
 transformers
 torch
 pandas
+pandas-datareader
 numpy
 python-dotenv
 vaderSentiment
