@@ -29,7 +29,8 @@ CORS(app, resources={
         "origins": [
             "http://localhost:5173",  # Local development
             "https://*.vercel.app",   # Vercel preview deployments
-            "https://stocks-now-three.vercel.app"  # Production domain
+            "https://stocks-now-three.vercel.app",  # Vercel domain
+            "https://quantsight.pro"  # Custom domain
         ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"]
