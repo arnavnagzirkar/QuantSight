@@ -7,9 +7,12 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading } = useAuth()
+  const { user, loading, profile } = useAuth()
+
+  console.log('🔵 [ProtectedRoute] Checking access:', { user: user?.id, loading, profile: profile?.id })
 
   if (loading) {
+    console.log('🔵 [ProtectedRoute] Still loading...')
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -21,25 +24,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   if (!user) {
+    console.log('🔴 [ProtectedRoute] No user, redirecting to login')
     return <Navigate to="/login" replace />
   }
 
-  // Check if email is verified
-  if (user && !user.email_confirmed_at) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="max-w-md text-center space-y-4">
-          <div className="rounded-full bg-yellow-500/10 w-16 h-16 flex items-center justify-center mx-auto">
-            <Loader2 className="h-8 w-8 text-yellow-500" />
-          </div>
-          <h2 className="text-2xl font-bold">Email Verification Required</h2>
-          <p className="text-muted-foreground">
-            Please verify your email address to access QuantSight. Check your inbox for the verification link.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
+  console.log('🟢 [ProtectedRoute] Access granted')
   return <>{children}</>
 }

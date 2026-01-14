@@ -64,8 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    console.log('🔵 [AuthContext] Initializing auth')
+    
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('🔴 [AuthContext] Session fetch error:', error)
+      }
+      console.log('🔵 [AuthContext] Initial session:', session?.user?.id || 'none')
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -77,7 +83,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Listen for auth changes
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔵 [AuthContext] Auth event:', event, 'user:', session?.user?.id || 'none')
+      
+      // Only clear on explicit signout
+      if (event === 'SIGNED_OUT') {
+        setSession(null)
+        setUser(null)
+        setProfile(null)
+        setLoading(false)
+        return
+      }
+      
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
