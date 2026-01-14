@@ -15,4 +15,5 @@ xgboost
 pydantic
 plotly
 matplotlib
+click
 pyarrow>=15
