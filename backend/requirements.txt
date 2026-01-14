@@ -14,4 +14,5 @@ statsmodels
 xgboost
 pydantic
 plotly
+matplotlib
 pyarrow>=15
