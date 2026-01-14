@@ -43,26 +43,44 @@ export default function LoginPage() {
   }
 
   const handleGoogleSignIn = async () => {
+    console.log('🔵 [LoginPage] Google sign-in button clicked')
     setError('')
     setLoading(true)
     try {
+      console.log('🔵 [LoginPage] Calling signInWithGoogle...')
       const { error } = await signInWithGoogle()
-      if (error) setError(error.message)
+      console.log('🔵 [LoginPage] Google sign-in result:', { error })
+      if (error) {
+        console.error('❌ [LoginPage] Google sign-in error:', error)
+        setError(error.message)
+      } else {
+        console.log('✅ [LoginPage] Google sign-in successful')
+      }
     } catch (err) {
-      setError('Failed to sign in with Google')
+      console.error('❌ [LoginPage] Google sign-in exception:', err)
+      setError('Failed to sign in with Google: ' + (err as Error).message)
     } finally {
       setLoading(false)
     }
   }
 
   const handleGithubSignIn = async () => {
+    console.log('🟣 [LoginPage] GitHub sign-in button clicked')
     setError('')
     setLoading(true)
     try {
+      console.log('🟣 [LoginPage] Calling signInWithGithub...')
       const { error } = await signInWithGithub()
-      if (error) setError(error.message)
+      console.log('🟣 [LoginPage] GitHub sign-in result:', { error })
+      if (error) {
+        console.error('❌ [LoginPage] GitHub sign-in error:', error)
+        setError(error.message)
+      } else {
+        console.log('✅ [LoginPage] GitHub sign-in successful')
+      }
     } catch (err) {
-      setError('Failed to sign in with GitHub')
+      console.error('❌ [LoginPage] GitHub sign-in exception:', err)
+      setError('Failed to sign in with GitHub: ' + (err as Error).message)
     } finally {
       setLoading(false)
     }

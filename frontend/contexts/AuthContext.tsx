@@ -137,22 +137,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signInWithGoogle = async () => {
+    console.log('🔵 [AuthContext] signInWithGoogle called')
+    console.log('🔵 [AuthContext] Redirect URL:', `${window.location.origin}/auth/callback`)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
+    console.log('🔵 [AuthContext] Google OAuth result:', { error })
+    if (error) {
+      console.error('❌ [AuthContext] Google OAuth error:', error.message, error)
+    } else {
+      console.log('✅ [AuthContext] Google OAuth initiated successfully')
+    }
     return { error }
   }
 
   const signInWithGithub = async () => {
+    console.log('🟣 [AuthContext] signInWithGithub called')
+    console.log('🟣 [AuthContext] Redirect URL:', `${window.location.origin}/auth/callback`)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
+    console.log('🟣 [AuthContext] GitHub OAuth result:', { error })
+    if (error) {
+      console.error('❌ [AuthContext] GitHub OAuth error:', error.message, error)
+    } else {
+      console.log('✅ [AuthContext] GitHub OAuth initiated successfully')
+    }
     return { error }
   }
 
