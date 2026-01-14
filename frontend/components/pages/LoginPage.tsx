@@ -12,7 +12,7 @@ import { FaGoogle, FaGithub } from 'react-icons/fa'
 export default function LoginPage() {
   const navigate = useNavigate()
   const { signIn, signInWithGoogle, signInWithGithub } = useAuth()
-  const [email, setEmail] = useState('')
+  const [emailOrUsername, setEmailOrUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -23,12 +23,12 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const { error } = await signIn(email, password)
+      const { error } = await signIn(emailOrUsername, password)
       if (error) {
         if (error.message.includes('Email not confirmed')) {
           setError('Please verify your email before signing in. Check your inbox for the verification link.')
         } else if (error.message.includes('Invalid')) {
-          setError('Invalid email or password. Please try again.')
+          setError('Invalid email/username or password. Please try again.')
         } else {
           setError(error.message)
         }
@@ -107,15 +107,15 @@ export default function LoginPage() {
           
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="emailOrUsername">Email or Username</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="your@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="emailOrUsername"
+                  type="text"
+                  placeholder="email@example.com or username"
+                  value={emailOrUsername}
+                  onChange={(e) => setEmailOrUsername(e.target.value)}
                   className="pl-10"
                   required
                   disabled={loading}

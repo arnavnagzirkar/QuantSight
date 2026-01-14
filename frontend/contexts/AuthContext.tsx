@@ -159,10 +159,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const signIn = async (email: string, password: string) => {
-    console.log('🔵 [AuthContext] signIn called with email:', email)
+  const signIn = async (emailOrUsername: string, password: string) => {
+    console.log('🔵 [AuthContext] signIn called with:', emailOrUsername)
+    
+    let emailToUse = emailOrUsername
+    
+    // Check if input is an email (contains @) or username
+    if (!emailOrUsername.includes('@')) {
+      console.log('🔵 [AuthContext] Input is username, looking up email')
+      // Look up email from username
+      const { data: profile, error: lookupError } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('username', emailOrUsername)
+        .single()
+      
+      if (lookupError || !profile) {
+        console.error('🔴 [AuthContext] Username lookup failed:', lookupError)
+        return { error: { message: 'Invalid username or password' } as any }
+      }
+      
+      emailToUse = profile.email
+      console.log('🟢 [AuthContext] Found email for username:', emailToUse)
+    }
+    
+    console.log('🔵 [AuthContext] Signing in with email:', emailToUse)
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: emailToUse,
       password,
     })
     console.log('🔵 [AuthContext] signIn response:', { data, error })
