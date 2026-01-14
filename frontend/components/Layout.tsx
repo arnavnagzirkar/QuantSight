@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Ticker Intelligence', href: '/ticker-intelligence', icon: TrendingUp },
   { name: 'Factor Explorer', href: '/factor-explorer', icon: Activity },
   { name: 'Model Lab', href: '/model-lab', icon: FlaskConical },
