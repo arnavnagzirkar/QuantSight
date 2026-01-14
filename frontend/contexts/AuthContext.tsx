@@ -102,37 +102,84 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role?: string
     }
   ) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: metadata,
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
-
-    if (!error && data.user) {
-      // Create profile entry
-      await supabase.from('profiles').insert({
-        id: data.user.id,
-        email: data.user.email,
-        full_name: metadata.full_name,
-        username: metadata.username,
-        use_case: metadata.use_case,
-        company_name: metadata.company_name,
-        role: metadata.role,
-        email_verified: false,
+    console.log('🔵 [AuthContext] signUp called with:', { email, metadata })
+    
+    try {
+      console.log('🔵 [AuthContext] Calling supabase.auth.signUp...')
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: metadata,
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
       })
-    }
 
-    return { error }
+      console.log('🔵 [AuthContext] signUp response:', { data, error })
+
+      if (error) {
+        console.error('🔴 [AuthContext] signUp error:', error)
+        return { error }
+      }
+
+      if (data.user) {
+        console.log('🟢 [AuthContext] User created:', data.user.id)
+        console.log('🟢 [AuthContext] User details:', {
+          id: data.user.id,
+          email: data.user.email,
+          email_confirmed_at: data.user.email_confirmed_at,
+          user_metadata: data.user.user_metadata
+        })
+
+        // Create profile entry
+        const profileData = {
+          id: data.user.id,
+          email: data.user.email,
+          full_name: metadata.full_name,
+          username: metadata.username,
+          use_case: metadata.use_case,
+          company_name: metadata.company_name,
+          role: metadata.role,
+          email_verified: false,
+        }
+        
+        console.log('🔵 [AuthContext] Creating profile with data:', profileData)
+        const { data: profileResult, error: profileError } = await supabase.from('profiles').insert(profileData)
+        
+        if (profileError) {
+          console.error('🔴 [AuthContext] Profile creation error:', profileError)
+          console.error('🔴 [AuthContext] Profile error details:', {
+            message: profileError.message,
+            details: profileError.details,
+            hint: profileError.hint,
+            code: profileError.code
+          })
+        } else {
+          console.log('🟢 [AuthContext] Profile created successfully:', profileResult)
+        }
+      } else {
+        console.warn('⚠️ [AuthContext] No user returned from signUp')
+      }
+
+      return { error }
+    } catch (err) {
+      console.error('🔴 [AuthContext] signUp exception:', err)
+      return { error: err as any }
+    }
   }
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    console.log('🔵 [AuthContext] signIn called with email:', email)
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
+    console.log('🔵 [AuthContext] signIn response:', { data, error })
+    if (error) {
+      console.error('🔴 [AuthContext] signIn error:', error)
+    } else {
+      console.log('🟢 [AuthContext] signIn successful')
+    }
     return { error }
   }
 

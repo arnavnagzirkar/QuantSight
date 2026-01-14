@@ -76,6 +76,7 @@ export default function RegisterPage() {
     if (!validateForm()) return
 
     setLoading(true)
+    console.log('🔵 [RegisterPage] Form submission started')
 
     try {
       const metadata = {
@@ -88,31 +89,44 @@ export default function RegisterPage() {
         })
       }
 
+      console.log('🔵 [RegisterPage] Calling signUp with:', { email: formData.email, metadata })
       const { error } = await signUp(formData.email, formData.password, metadata)
       
+      console.log('🔵 [RegisterPage] signUp completed, error:', error)
+      
       if (error) {
+        console.error('🔴 [RegisterPage] Registration error:', error)
         if (error.message.includes('already registered')) {
           setError('This email is already registered. Please sign in instead.')
         } else {
           setError(error.message)
         }
       } else {
+        console.log('🟢 [RegisterPage] Registration successful!')
         setSuccess(true)
       }
     } catch (err) {
+      console.error('🔴 [RegisterPage] Registration exception:', err)
       setError('An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)
+      console.log('🔵 [RegisterPage] Form submission completed')
     }
   }
 
   const handleGoogleSignIn = async () => {
+    console.log('🔵 [RegisterPage] Google sign-in clicked')
     setError('')
     setLoading(true)
     try {
       const { error } = await signInWithGoogle()
-      if (error) setError(error.message)
+      console.log('🔵 [RegisterPage] Google sign-in result:', { error })
+      if (error) {
+        console.error('🔴 [RegisterPage] Google sign-in error:', error)
+        setError(error.message)
+      }
     } catch (err) {
+      console.error('🔴 [RegisterPage] Google sign-in exception:', err)
       setError('Failed to sign in with Google')
     } finally {
       setLoading(false)
@@ -120,12 +134,18 @@ export default function RegisterPage() {
   }
 
   const handleGithubSignIn = async () => {
+    console.log('🔵 [RegisterPage] GitHub sign-in clicked')
     setError('')
     setLoading(true)
     try {
       const { error } = await signInWithGithub()
-      if (error) setError(error.message)
+      console.log('🔵 [RegisterPage] GitHub sign-in result:', { error })
+      if (error) {
+        console.error('🔴 [RegisterPage] GitHub sign-in error:', error)
+        setError(error.message)
+      }
     } catch (err) {
+      console.error('🔴 [RegisterPage] GitHub sign-in exception:', err)
       setError('Failed to sign in with GitHub')
     } finally {
       setLoading(false)
