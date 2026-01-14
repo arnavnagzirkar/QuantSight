@@ -154,6 +154,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             hint: profileError.hint,
             code: profileError.code
           })
+          // Return profile creation error instead of ignoring it
+          return { error: profileError }
         } else {
           console.log('🟢 [AuthContext] Profile created successfully:', profileResult)
         }
