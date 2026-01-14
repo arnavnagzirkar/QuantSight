@@ -130,35 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email_confirmed_at: data.user.email_confirmed_at,
           user_metadata: data.user.user_metadata
         })
-
-        // Create profile entry
-        const profileData = {
-          id: data.user.id,
-          email: data.user.email,
-          full_name: metadata.full_name,
-          username: metadata.username,
-          use_case: metadata.use_case,
-          company_name: metadata.company_name,
-          role: metadata.role,
-          email_verified: false,
-        }
-        
-        console.log('🔵 [AuthContext] Creating profile with data:', profileData)
-        const { data: profileResult, error: profileError } = await supabase.from('profiles').insert(profileData)
-        
-        if (profileError) {
-          console.error('🔴 [AuthContext] Profile creation error:', profileError)
-          console.error('🔴 [AuthContext] Profile error details:', {
-            message: profileError.message,
-            details: profileError.details,
-            hint: profileError.hint,
-            code: profileError.code
-          })
-          // Return profile creation error instead of ignoring it
-          return { error: profileError }
-        } else {
-          console.log('🟢 [AuthContext] Profile created successfully:', profileResult)
-        }
+        console.log('✉️ [AuthContext] Profile will be created after email verification')
       } else {
         console.warn('⚠️ [AuthContext] No user returned from signUp')
       }
