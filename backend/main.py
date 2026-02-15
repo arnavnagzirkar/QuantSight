@@ -12,12 +12,10 @@ from dotenv import load_dotenv
 
 from core.features import ta_features
 from core.backtest import run_backtest
-from core.research.report import report_bp
-
-
-# NEW: research blueprint (walk-forward ML + backtest)
-from core.research.api import research_bp
-from core.adapter_api import adapter_bp
+# Temporarily disabled due to dependency issues
+# from core.research.report import report_bp
+# from core.research.api import research_bp
+# from core.adapter_api import adapter_bp
 
 load_dotenv()
 
@@ -28,6 +26,9 @@ CORS(app, resources={
     r"/*": {
         "origins": [
             "http://localhost:5173",  # Local development
+            "http://localhost:5174",  # Alternative port
+            "http://localhost:5175",  # Alternative port
+            "http://localhost:5176",  # Alternative port
             "https://*.vercel.app",   # Vercel preview deployments
             "https://stocks-now-three.vercel.app",  # Vercel domain
             "https://quantsight.pro"  # Custom domain
@@ -41,13 +42,18 @@ CORS(app, resources={
 app.url_map.strict_slashes = False
 
 # Register research API endpoints at /api/run
-app.register_blueprint(research_bp)
-app.register_blueprint(report_bp)
-app.register_blueprint(adapter_bp)  # React frontend adapter
+# Temporarily disabled due to dependency issues
+# app.register_blueprint(research_bp)
+# app.register_blueprint(report_bp)
+# app.register_blueprint(adapter_bp)  # React frontend adapter
 
 @app.before_request
-def log_routes():
-    print("\n=== REGISTERED ROUTES ===")
+def log_request():
+    print(f"\n{'='*60}", flush=True)
+    print(f"[REQUEST] {request.method} {request.path}", flush=True)
+    print(f"[REQUEST] Origin: {request.headers.get('Origin', 'N/A')}", flush=True)
+    print(f"[REQUEST] Args: {dict(request.args)}", flush=True)
+    print(f"{'='*60}\n", flush=True)
     for rule in app.url_map.iter_rules():
         print(f"{rule.methods} {rule.rule}")
     print("=========================\n")
@@ -78,27 +84,33 @@ def analyze_sentiment(headlines):
     if not headlines:
         return results
     if not USE_VADER:
-        for h in headlines:
+        for article in headlines:
+            h = article["title"] if isinstance(article, dict) else article
             out = sentiment_pipe(h)[0]
-            results.append(
-                {
-                    "headline": h,
-                    "sentiment": out["label"],
-                    "confidence": f"{out['score'] * 100:.2f}%",
-                }
-            )
+            result = {
+                "headline": h,
+                "sentiment": out["label"],
+                "confidence": f"{out['score'] * 100:.2f}%",
+            }
+            if isinstance(article, dict):
+                result["source"] = article.get("source", "Unknown")
+                result["publishedAt"] = article.get("publishedAt", "")
+            results.append(result)
     else:
-        for h in headlines:
+        for article in headlines:
+            h = article["title"] if isinstance(article, dict) else article
             s = vader.polarity_scores(h)
             comp = s["compound"]
             label = "POSITIVE" if comp >= 0.05 else ("NEGATIVE" if comp <= -0.05 else "NEUTRAL")
-            results.append(
-                {
-                    "headline": h,
-                    "sentiment": label,
-                    "confidence": f"{abs(comp) * 100:.2f}%",
-                }
-            )
+            result = {
+                "headline": h,
+                "sentiment": label,
+                "confidence": f"{abs(comp) * 100:.2f}%",
+            }
+            if isinstance(article, dict):
+                result["source"] = article.get("source", "Unknown")
+                result["publishedAt"] = article.get("publishedAt", "")
+            results.append(result)
     return results
 
 
@@ -121,7 +133,17 @@ def fetch_news(ticker: str):
     r.raise_for_status()
     data = r.json()
     articles = data.get("articles", [])
-    return [a.get("title", "").strip() for a in articles if a.get("title")]
+    
+    # Return full article objects with title, source, and date
+    return [
+        {
+            "title": a.get("title", "").strip(),
+            "source": a.get("source", {}).get("name", "Unknown"),
+            "publishedAt": a.get("publishedAt", "")
+        }
+        for a in articles 
+        if a.get("title")
+    ]
 
 
 # ---------------- yfinance helpers ----------------
@@ -236,14 +258,32 @@ def backtest_page():
 # ===================== JSON APIs =====================
 @app.route("/analyze", methods=["GET", "POST"])
 def analyze():
+    print(f"\n[ANALYZE] Received {request.method} request", flush=True)
+    print(f"[ANALYZE] Headers: {dict(request.headers)}", flush=True)
+    
     ticker = (request.args.get("ticker") if request.method == "GET" else request.form.get("ticker"))
+    print(f"[ANALYZE] Ticker parameter: {ticker}", flush=True)
+    
     if not ticker:
+        print("[ANALYZE] ERROR: No ticker provided", flush=True)
         return jsonify({"error": "Please provide a stock ticker symbol!"}), 400
+    
     ticker = ticker.upper().strip()
+    print(f"[ANALYZE] Processing ticker: {ticker}", flush=True)
+    
     try:
+        print(f"[ANALYZE] Fetching news for {ticker}...", flush=True)
         headlines = fetch_news(ticker)
+        print(f"[ANALYZE] Found {len(headlines)} headlines", flush=True)
+        
+        print(f"[ANALYZE] Analyzing sentiment...", flush=True)
         sentiments = analyze_sentiment(headlines)
+        print(f"[ANALYZE] Sentiment analysis complete: {len(sentiments)} results", flush=True)
+        
+        print(f"[ANALYZE] Fetching stock price...", flush=True)
         stock_price = fetch_stock_price(ticker)
+        print(f"[ANALYZE] Stock price: {stock_price}", flush=True)
+        
         payload = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "stock_info": {"ticker": ticker, "current_price": stock_price},
@@ -253,10 +293,15 @@ def analyze():
                 "details": sentiments,
             },
         }
+        print(f"[ANALYZE] SUCCESS: Returning payload with {len(sentiments)} sentiments", flush=True)
         return jsonify(payload)
     except requests.HTTPError as e:
+        print(f"[ANALYZE] HTTP ERROR: {e}", flush=True)
         return jsonify({"error": f"NewsAPI HTTP error: {e}"}), 502
     except Exception as e:
+        print(f"[ANALYZE] EXCEPTION: {type(e).__name__}: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 

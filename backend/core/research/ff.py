@@ -2,8 +2,14 @@
 import numpy as np
 import pandas as pd
 from typing import Dict, Literal
-from pandas_datareader import data as pdr
-import statsmodels.api as sm
+try:
+    from pandas_datareader import data as pdr
+except ImportError:
+    pdr = None
+try:
+    import statsmodels.api as sm
+except ImportError:
+    sm = None
 
 FFSet = Literal["ff3", "ff5"]
 
