@@ -1,32 +1,25 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-// Mock data for equity curve
-const generateEquityCurve = () => {
-  const data = [];
-  let strategyValue = 100000;
-  let benchmarkValue = 100000;
-  const startDate = new Date('2024-01-01');
-  
-  for (let i = 0; i < 250; i++) {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + i);
-    
-    strategyValue *= (1 + (Math.random() * 0.003 + 0.0005));
-    benchmarkValue *= (1 + (Math.random() * 0.002 + 0.0002));
-    
-    data.push({
-      date: date.toISOString().split('T')[0],
-      strategy: Math.round(strategyValue),
-      benchmark: Math.round(benchmarkValue),
-    });
+interface EquityCurvePoint {
+  date: string;
+  strategy: number;
+  benchmark?: number;
+}
+
+interface EquityCurveChartProps {
+  data?: EquityCurvePoint[];
+  valueFormat?: 'multiple' | 'currency';
+}
+
+export function EquityCurveChart({ data = [], valueFormat = 'multiple' }: EquityCurveChartProps) {
+  if (data.length === 0) {
+    return <div className="h-80 flex items-center justify-center text-muted-foreground">No equity data available</div>;
   }
-  
-  return data;
-};
+  const hasBenchmark = data.some(point => point.benchmark !== undefined);
+  const formatValue = (value: number) => valueFormat === 'currency'
+    ? `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+    : `${value.toFixed(2)}x`;
 
-const data = generateEquityCurve();
-
-export function EquityCurveChart() {
   return (
     <div className="h-80">
       <ResponsiveContainer width="100%" height="100%">
@@ -44,7 +37,7 @@ export function EquityCurveChart() {
           <YAxis 
             tick={{ fontSize: 12 }}
             className="text-gray-600 dark:text-gray-400"
-            tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+            tickFormatter={(value: number) => formatValue(value)}
           />
           <Tooltip 
             contentStyle={{ 
@@ -53,7 +46,7 @@ export function EquityCurveChart() {
               borderRadius: '8px',
               color: '#fff'
             }}
-            formatter={(value: any) => [`$${value.toLocaleString()}`, '']}
+            formatter={(value: number) => [formatValue(value), '']}
             labelFormatter={(label) => `Date: ${label}`}
           />
           <Legend />
@@ -65,14 +58,16 @@ export function EquityCurveChart() {
             dot={false}
             name="Strategy"
           />
-          <Line 
-            type="monotone" 
-            dataKey="benchmark" 
-            stroke="#9ca3af" 
-            strokeWidth={2}
-            dot={false}
-            name="Benchmark"
-          />
+          {hasBenchmark && (
+            <Line
+              type="monotone"
+              dataKey="benchmark"
+              stroke="#9ca3af"
+              strokeWidth={2}
+              dot={false}
+              name="Benchmark"
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>

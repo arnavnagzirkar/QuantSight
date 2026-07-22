@@ -8,11 +8,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { TrendingUp, Mail, Lock, Loader2 } from 'lucide-react'
 import { FaGoogle, FaGithub } from 'react-icons/fa'
+import { usePersistentState } from '@/hooks/usePersistentState'
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const { signIn, signInWithGoogle, signInWithGithub } = useAuth()
-  const [emailOrUsername, setEmailOrUsername] = useState('')
+  const [emailOrUsername, setEmailOrUsername] = usePersistentState('quantsight:v1:login-identifier', '')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -35,7 +36,7 @@ export default function LoginPage() {
       } else {
         navigate('/dashboard')
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)
@@ -43,21 +44,14 @@ export default function LoginPage() {
   }
 
   const handleGoogleSignIn = async () => {
-    console.log('🔵 [LoginPage] Google sign-in button clicked')
     setError('')
     setLoading(true)
     try {
-      console.log('🔵 [LoginPage] Calling signInWithGoogle...')
       const { error } = await signInWithGoogle()
-      console.log('🔵 [LoginPage] Google sign-in result:', { error })
       if (error) {
-        console.error('❌ [LoginPage] Google sign-in error:', error)
         setError(error.message)
-      } else {
-        console.log('✅ [LoginPage] Google sign-in successful')
       }
     } catch (err) {
-      console.error('❌ [LoginPage] Google sign-in exception:', err)
       setError('Failed to sign in with Google: ' + (err as Error).message)
     } finally {
       setLoading(false)
@@ -65,21 +59,14 @@ export default function LoginPage() {
   }
 
   const handleGithubSignIn = async () => {
-    console.log('🟣 [LoginPage] GitHub sign-in button clicked')
     setError('')
     setLoading(true)
     try {
-      console.log('🟣 [LoginPage] Calling signInWithGithub...')
       const { error } = await signInWithGithub()
-      console.log('🟣 [LoginPage] GitHub sign-in result:', { error })
       if (error) {
-        console.error('❌ [LoginPage] GitHub sign-in error:', error)
         setError(error.message)
-      } else {
-        console.log('✅ [LoginPage] GitHub sign-in successful')
       }
     } catch (err) {
-      console.error('❌ [LoginPage] GitHub sign-in exception:', err)
       setError('Failed to sign in with GitHub: ' + (err as Error).message)
     } finally {
       setLoading(false)

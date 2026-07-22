@@ -1,13 +1,12 @@
 # core/research/api.py
-from flask import Blueprint, request, jsonify
-from matplotlib import ticker
+from flask import Blueprint, g, request, jsonify
 import pandas as pd
 import yfinance as yf
 import numpy as np
 import os
 
 
-from .experiment import run_walkforward_xgb
+from .experiment import run_walkforward_ensemble, run_walkforward_lstm, run_walkforward_xgb
 from .factors import compute_alpha_factors, compute_pca_diagnostics
 from .models import feature_columns
 from .stats import (
@@ -168,6 +167,8 @@ def model_backtest():
     start   = data.get("start", "2015-01-01")
     horizon = data.get("horizon", "1d")
     model   = data.get("model", "xgb")
+    model_params = data.get("model_params", {})
+    ensemble_weights = data.get("ensemble_weights", {"xgb": 0.5, "lstm": 0.5})
 
     px_raw = yf.download(ticker, start=start, auto_adjust=True, progress=False)
     if px_raw is None or px_raw.empty:
@@ -177,15 +178,26 @@ def model_backtest():
     vix = _get_close_series("^VIX", start)
 
     if model == "xgb":
-        out = run_walkforward_xgb(px, spy=spy, vix=vix, sector=None, horizon=horizon)
+        out = run_walkforward_xgb(
+            px, spy=spy, vix=vix, sector=None, horizon=horizon,
+            params=model_params.get("xgb") or data.get("params"),
+        )
     elif model == "lstm":
-        return jsonify({"error": "LSTM not implemented yet"}), 400
-    elif model == "ens":
-        return jsonify({"error": "Ensemble not implemented yet"}), 400
+        out = run_walkforward_lstm(
+            px, spy=spy, vix=vix, sector=None, horizon=horizon,
+            params=model_params.get("lstm"),
+        )
+    elif model in {"ens", "ensemble"}:
+        out = run_walkforward_ensemble(
+            px, spy=spy, vix=vix, sector=None, horizon=horizon,
+            weights=ensemble_weights,
+            xgb_params=model_params.get("xgb"),
+            lstm_params=model_params.get("lstm"),
+        )
     else:
         return jsonify({"error": f"Unknown model '{model}'"}), 400
 
-    resp = {}
+    resp = {"metrics": out.get("metrics", {})}
     for k in ("equity_curve","daily_returns"):
         s = out.get(k, pd.Series(dtype="float"))
         if isinstance(s, pd.Series) and not s.empty:
@@ -198,6 +210,8 @@ def model_backtest():
         # surface top-15 only
         fi = out["feature_importance"] or []
         resp["feature_importance"] = fi[:15]
+    if "component_metrics" in out:
+        resp["component_metrics"] = out["component_metrics"]
 
     return jsonify(resp)
 
@@ -278,6 +292,7 @@ def experiment_run():
             params=out["best_params"],
             model_dir=model_dir,
             train_window=trw,
+            storage_user_id=g.user_id,
         )
         out["persisted"] = paths  # {"model_path": "...", "meta_path": "..."}
 

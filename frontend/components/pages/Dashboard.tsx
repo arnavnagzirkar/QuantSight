@@ -1,137 +1,118 @@
-import { TrendingUp, TrendingDown, Activity, DollarSign } from 'lucide-react';
+import { useEffect } from 'react';
+import { Activity, BrainCircuit, TrendingDown, TrendingUp } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
 import { MetricCard } from '../MetricCard';
 import { EquityCurveChart } from '../charts/EquityCurveChart';
-import { PerformanceTable } from '../PerformanceTable';
+import { Alert, AlertDescription } from '../ui/alert';
+import { Badge } from '../ui/badge';
+import { Card } from '../ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { usePersistentAPI } from '../../hooks/usePersistentAPI';
+import { dashboardAPI } from '../../services/api';
+import type { APIEnvelope, DashboardData } from '../../types/api';
 
 export function Dashboard() {
+  const { data, loading, error, execute } = usePersistentAPI<APIEnvelope<DashboardData>>('dashboard', dashboardAPI.getDashboard);
+  const dashboard = data?.data;
+
+  useEffect(() => {
+    void execute();
+  }, [execute]);
+
+  if (loading && !dashboard) {
+    return <Card className="p-10 text-center text-muted-foreground">Loading your research dashboard...</Card>;
+  }
+  if (error) {
+    return <Alert variant="destructive"><AlertDescription>{error.message}</AlertDescription></Alert>;
+  }
+
+  const overview = dashboard?.overview;
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-foreground mb-2">Dashboard</h1>
-        <p className="text-muted-foreground">Overview of your quantitative research and portfolio performance</p>
+        <p className="text-muted-foreground">Your latest completed research and active background work</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
-          title="Portfolio Value"
-          value="$1,245,678"
-          change="+12.4%"
-          changeType="positive"
-          icon={DollarSign}
-        />
-        <MetricCard
-          title="Sharpe Ratio"
-          value="1.82"
-          subtitle="Annual"
+          title="Latest Equity"
+          value={overview?.latest_equity === null || overview?.latest_equity === undefined ? '-' : `${overview.latest_equity.toFixed(2)}x`}
+          subtitle={dashboard?.latest_run?.name || 'No completed portfolio or backtest'}
           icon={TrendingUp}
         />
-        <MetricCard
-          title="Max Drawdown"
-          value="-8.3%"
-          changeType="negative"
-          icon={TrendingDown}
-        />
-        <MetricCard
-          title="Active Models"
-          value="3"
-          subtitle="Running"
-          icon={Activity}
-        />
+        <MetricCard title="Sharpe Ratio" value={formatNumber(overview?.sharpe)} subtitle="Latest completed run" icon={Activity} />
+        <MetricCard title="Max Drawdown" value={formatPercent(overview?.max_drawdown)} changeType="negative" icon={TrendingDown} />
+        <MetricCard title="Active Jobs" value={overview?.active_jobs ?? 0} subtitle={`${overview?.completed_models ?? 0} completed models`} icon={BrainCircuit} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-semibold text-foreground mb-1">Portfolio Equity Curve</h2>
-                <p className="text-sm text-muted-foreground">Strategy vs Buy & Hold Benchmark</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="flex items-center gap-2 text-sm">
-                  <span className="w-3 h-3 bg-chart-1 rounded-full"></span>
-                  <span className="text-foreground">Strategy</span>
-                </span>
-                <span className="flex items-center gap-2 text-sm">
-                  <span className="w-3 h-3 bg-muted-foreground rounded-full"></span>
-                  <span className="text-foreground">Benchmark</span>
-                </span>
-              </div>
-            </div>
-            <EquityCurveChart />
+      <Card className="p-6">
+        <div className="flex items-start justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-xl font-semibold">Latest Equity Curve</h2>
+            <p className="text-sm text-muted-foreground">Strategy versus configured benchmark</p>
           </div>
+          {dashboard?.latest_run && <Badge variant="outline">{dashboard.latest_run.job_type.replace('_', ' ')}</Badge>}
         </div>
+        <EquityCurveChart data={(dashboard?.equity_curve ?? []).map(point => ({
+          date: point.date,
+          strategy: point.strategy,
+          benchmark: point.benchmark ?? undefined,
+        }))} />
+        {!dashboard?.latest_run && (
+          <p className="text-center text-sm text-muted-foreground mt-3">
+            Run a <Link className="text-primary hover:underline" to="/strategy-backtest">strategy backtest</Link> or{' '}
+            <Link className="text-primary hover:underline" to="/portfolio-lab">portfolio simulation</Link> to populate this view.
+          </p>
+        )}
+      </Card>
 
-        <div className="space-y-6">
-          <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-foreground mb-4">Key Metrics</h3>
-            <div className="space-y-4">
-              <MetricRow label="CAGR" value="18.5%" />
-              <MetricRow label="Annual Vol" value="14.2%" />
-              <MetricRow label="Sortino" value="2.41" />
-              <MetricRow label="Alpha" value="4.8%" />
-              <MetricRow label="Beta" value="0.78" />
-              <MetricRow label="Information Ratio" value="1.23" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-4">Latest Portfolio Weights</h2>
+          <Table>
+            <TableHeader><TableRow><TableHead>Ticker</TableHead><TableHead>Weight</TableHead><TableHead>Recent Contribution</TableHead></TableRow></TableHeader>
+            <TableBody>{(dashboard?.holdings ?? []).map(holding => (
+              <TableRow key={holding.ticker}>
+                <TableCell className="font-medium">{holding.ticker}</TableCell>
+                <TableCell>{(holding.weight * 100).toFixed(1)}%</TableCell>
+                <TableCell>{formatPercent(holding.contribution)}</TableCell>
+              </TableRow>
+            ))}</TableBody>
+          </Table>
+          {dashboard?.holdings.length === 0 && <EmptyText text="No completed portfolio run yet" />}
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="text-xl font-semibold mb-4">Recent Research Jobs</h2>
+          <div className="space-y-3">{(dashboard?.recent_jobs ?? []).map(job => (
+            <div key={job.id} className="flex items-center justify-between gap-4 border-b border-border pb-3 last:border-0 last:pb-0">
+              <div className="min-w-0">
+                <p className="font-medium truncate">{job.name || job.job_type.replace('_', ' ')}</p>
+                <p className="text-xs text-muted-foreground">{new Date(job.created_at).toLocaleString()}</p>
+              </div>
+              <div className="text-right">
+                <Badge variant="outline" className="capitalize">{job.status.replace('_', ' ')}</Badge>
+                {['queued', 'running', 'cancel_requested'].includes(job.status) && <p className="text-xs text-muted-foreground mt-1">{job.progress_percent}%</p>}
+              </div>
             </div>
-          </div>
-
-          <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-foreground mb-4">Recent Signals</h3>
-            <div className="space-y-3">
-              <SignalItem ticker="AAPL" signal="LONG" confidence={0.78} />
-              <SignalItem ticker="MSFT" signal="LONG" confidence={0.65} />
-              <SignalItem ticker="GOOGL" signal="SHORT" confidence={0.52} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
-        <h2 className="text-xl font-semibold text-foreground mb-4">Top Holdings Performance</h2>
-        <PerformanceTable data={[
-          { name: 'AAPL', returns: 12.4, sharpe: 1.8, maxDrawdown: -8.2 },
-          { name: 'MSFT', returns: 15.7, sharpe: 2.1, maxDrawdown: -6.5 },
-          { name: 'GOOGL', returns: 8.9, sharpe: 1.5, maxDrawdown: -11.3 }
-        ]} />
+          ))}</div>
+          {dashboard?.recent_jobs.length === 0 && <EmptyText text="No research jobs yet" />}
+        </Card>
       </div>
     </div>
   );
 }
 
-function MetricRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="font-medium text-foreground">{value}</span>
-    </div>
-  );
+function formatNumber(value: number | null | undefined) {
+  return value === null || value === undefined ? '-' : value.toFixed(2);
 }
 
-function SignalItem({ ticker, signal, confidence }: { ticker: string; signal: string; confidence: number }) {
-  const isLong = signal === 'LONG';
-  return (
-    <div className="flex items-center justify-between p-3 bg-accent rounded-lg">
-      <div className="flex items-center gap-3">
-        <span className="font-medium text-foreground">{ticker}</span>
-        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-          isLong 
-            ? 'bg-chart-1/10 text-chart-1' 
-            : 'bg-chart-3/10 text-chart-3'
-        }`}>
-          {signal}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-chart-1"
-            style={{ width: `${confidence * 100}%` }}
-          />
-        </div>
-        <span className="text-sm text-muted-foreground w-12 text-right">
-          {(confidence * 100).toFixed(0)}%
-        </span>
-      </div>
-    </div>
-  );
+function formatPercent(value: number | null | undefined) {
+  return value === null || value === undefined ? '-' : `${(value * 100).toFixed(1)}%`;
+}
+
+function EmptyText({ text }: { text: string }) {
+  return <p className="text-center text-sm text-muted-foreground py-8">{text}</p>;
 }

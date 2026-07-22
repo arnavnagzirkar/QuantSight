@@ -1,364 +1,251 @@
 import { useState } from 'react';
-import { Play, Download, Calendar, DollarSign } from 'lucide-react';
+import { Download, Play, Square } from 'lucide-react';
+
+import { EquityCurveChart } from '../charts/EquityCurveChart';
+import { JobHistorySelect } from '../JobHistorySelect';
+import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
-import { Label } from '../ui/label';
 import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { Progress } from '../ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
-import { DateRangePicker } from '../DateRangePicker';
-import { TickerMultiSelect } from '../TickerMultiSelect';
-import { EquityCurveChart } from '../charts/EquityCurveChart';
-import { LongShortEquityChart } from '../charts/LongShortEquityChart';
-import { MetricCard } from '../MetricCard';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '../ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
+import { useRestorableJob } from '../../hooks/useRestorableJob';
+import { useUserPersistentState } from '../../hooks/usePersistentState';
+import { backtestAPI } from '../../services/api';
+import type { StrategyBacktestRequest, StrategyBacktestSummary } from '../../types/api';
+import { downloadCSV } from '../../utils/formatters';
 
-interface BacktestResult {
-  totalReturn: number;
-  cagr: number;
-  sharpe: number;
-  sortino: number;
-  maxDrawdown: number;
-  winRate: number;
-  profitFactor: number;
-  totalTrades: number;
-}
+type ModelType = StrategyBacktestRequest['model_type'];
+type Horizon = StrategyBacktestRequest['horizon'];
+type PositionRule = StrategyBacktestRequest['position_rule'];
 
 export function StrategyBacktest() {
-  const [isRunning, setIsRunning] = useState(false);
-  const [hasResults, setHasResults] = useState(true); // Set to true for demo
-  const [strategyType, setStrategyType] = useState('long-short');
-  const [tickers, setTickers] = useState<string[]>(['AAPL', 'MSFT', 'GOOGL']);
-  const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
+  const [name, setName] = useUserPersistentState('strategy-backtest:name', 'AAPL Strategy Backtest');
+  const [ticker, setTicker] = useUserPersistentState('strategy-backtest:ticker', 'AAPL');
+  const [modelType, setModelType] = useUserPersistentState<ModelType>('strategy-backtest:model-type', 'xgb');
+  const [horizon, setHorizon] = useUserPersistentState<Horizon>('strategy-backtest:horizon', '1d');
+  const [positionRule, setPositionRule] = useUserPersistentState<PositionRule>('strategy-backtest:position-rule', 'long_short');
+  const [startDate, setStartDate] = useUserPersistentState('strategy-backtest:start-date', '2018-01-01');
+  const [endDate, setEndDate] = useUserPersistentState('strategy-backtest:end-date', () => new Date().toISOString().slice(0, 10));
+  const [initialCapital, setInitialCapital] = useUserPersistentState('strategy-backtest:initial-capital', 100000);
+  const [costBps, setCostBps] = useUserPersistentState('strategy-backtest:cost-bps', 5);
+  const [trainWindow, setTrainWindow] = useUserPersistentState('strategy-backtest:train-window', 750);
+  const [testWindow, setTestWindow] = useUserPersistentState('strategy-backtest:test-window', 63);
+  const [maxFolds, setMaxFolds] = useUserPersistentState('strategy-backtest:max-folds', 10);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const { jobId, setJobId, job, history, error: jobError, cancel } = useRestorableJob('strategy-backtest', 'backtest');
+  const result = isStrategyResult(job?.result_summary) ? job.result_summary : null;
+  const running = submitting || ['queued', 'running', 'cancel_requested'].includes(job?.status ?? '');
 
-  // Mock results for demonstration
-  const mockResults: BacktestResult = {
-    totalReturn: 42.5,
-    cagr: 18.3,
-    sharpe: 1.85,
-    sortino: 2.41,
-    maxDrawdown: -12.4,
-    winRate: 58.2,
-    profitFactor: 1.82,
-    totalTrades: 247,
+  const handleRun = async () => {
+    const symbol = ticker.trim().toUpperCase();
+    if (!name.trim() || !/^[A-Z0-9.^-]{1,15}$/.test(symbol)) {
+      setFormError('Enter a name and valid ticker symbol.');
+      return;
+    }
+    if (startDate > endDate || testWindow >= trainWindow) {
+      setFormError('Check the date range and walk-forward windows.');
+      return;
+    }
+
+    setSubmitting(true);
+    setFormError(null);
+    setTicker(symbol);
+    try {
+      const response = await backtestAPI.createBacktest({
+        name: name.trim(),
+        ticker: symbol,
+        model_type: modelType,
+        horizon,
+        position_rule: positionRule,
+        start_date: startDate,
+        end_date: endDate,
+        initial_capital: initialCapital,
+        cost_bps: costBps,
+        train_window: trainWindow,
+        test_window: testWindow,
+        max_folds: maxFolds,
+        xgb_params: {
+          n_estimators: 400,
+          max_depth: 4,
+          learning_rate: 0.05,
+          subsample: 0.9,
+          colsample_bytree: 0.9,
+        },
+        lstm_params: {
+          sequence_length: 20,
+          hidden_size: 64,
+          num_layers: 1,
+          dropout: 0.1,
+          learning_rate: 0.001,
+          batch_size: 32,
+          max_epochs: 50,
+          patience: 8,
+        },
+        ensemble_weights: { xgb: 0.5, lstm: 0.5 },
+      }, `${symbol}-${modelType}-${horizon}-${positionRule}-${Date.now()}`);
+      setJobId(response.data.id);
+    } catch (submitError) {
+      setFormError(submitError instanceof Error ? submitError.message : 'Unable to start backtest');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const mockTrades = [
-    { date: '2024-11-20', ticker: 'AAPL', side: 'LONG', entry: 185.20, exit: 192.40, return: 3.9, pnl: 720 },
-    { date: '2024-11-18', ticker: 'MSFT', side: 'LONG', entry: 370.50, exit: 378.20, return: 2.1, pnl: 385 },
-    { date: '2024-11-15', ticker: 'GOOGL', side: 'SHORT', entry: 142.80, exit: 138.90, return: 2.7, pnl: 390 },
-    { date: '2024-11-12', ticker: 'TSLA', side: 'LONG', entry: 238.50, exit: 235.10, return: -1.4, pnl: -170 },
-    { date: '2024-11-10', ticker: 'NVDA', side: 'LONG', entry: 485.20, exit: 498.70, return: 2.8, pnl: 675 },
-  ];
-
-  const handleRunBacktest = () => {
-    setIsRunning(true);
-    // Simulate API call
-    setTimeout(() => {
-      setIsRunning(false);
-      setHasResults(true);
-    }, 2000);
-  };
+  const chartData = result ? mergeCurves(result) : [];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground mb-2">Strategy Backtest</h1>
-        <p className="text-muted-foreground">
-          Test trading strategies with historical data and analyze performance
-        </p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground mb-2">Strategy Backtest</h1>
+          <p className="text-muted-foreground">Evaluate a single-ticker model with a chronological out-of-sample position ledger</p>
+        </div>
+        <div className="flex gap-3">
+          {running && jobId && (
+            <Button variant="outline" onClick={() => void cancel()} disabled={job?.status === 'cancel_requested'}>
+              <Square className="w-4 h-4 mr-2" />
+              {job?.status === 'cancel_requested' ? 'Cancelling...' : 'Cancel'}
+            </Button>
+          )}
+          <Button onClick={handleRun} disabled={running}>
+            <Play className="w-4 h-4 mr-2" />
+            {running ? 'Running...' : 'Run backtest'}
+          </Button>
+        </div>
       </div>
 
-      {/* Configuration Panel */}
+      {(formError || jobError || job?.status === 'failed') && (
+        <Alert variant="destructive">
+          <AlertDescription>{formError || jobError?.message || job?.error_message || 'Backtest failed'}</AlertDescription>
+        </Alert>
+      )}
+
+      <JobHistorySelect jobs={history} label="Saved backtests" value={jobId} onValueChange={setJobId} />
+
       <Card className="p-6">
-        <h2 className="text-xl font-semibold text-foreground mb-4">Backtest Configuration</h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="strategy">Strategy Type</Label>
-              <Select value={strategyType} onValueChange={setStrategyType}>
-                <SelectTrigger id="strategy">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="long-only">Long Only</SelectItem>
-                  <SelectItem value="long-short">Long-Short</SelectItem>
-                  <SelectItem value="market-neutral">Market Neutral</SelectItem>
-                  <SelectItem value="pairs-trading">Pairs Trading</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="model">Model</Label>
-              <Select defaultValue="model_1">
-                <SelectTrigger id="model">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="model_1">Momentum + Value XGBoost</SelectItem>
-                  <SelectItem value="model_2">Quality Factor Ensemble</SelectItem>
-                  <SelectItem value="model_3">Mean Reversion RF</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Tickers</Label>
-              <TickerMultiSelect value={tickers} onChange={setTickers} />
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Date Range</Label>
-              <DateRangePicker 
-                from={dateRange.from} 
-                to={dateRange.to} 
-                onSelect={setDateRange} 
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="capital">Initial Capital</Label>
-              <Input
-                id="capital"
-                type="number"
-                defaultValue="100000"
-                placeholder="100000"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="rebalance">Rebalance</Label>
-                <Select defaultValue="daily">
-                  <SelectTrigger id="rebalance">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">Daily</SelectItem>
-                    <SelectItem value="weekly">Weekly</SelectItem>
-                    <SelectItem value="monthly">Monthly</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="commission">Commission (bps)</Label>
-                <Input
-                  id="commission"
-                  type="number"
-                  defaultValue="5"
-                  placeholder="5"
-                />
-              </div>
-            </div>
-
-            <Button 
-              onClick={handleRunBacktest} 
-              disabled={isRunning}
-              className="w-full"
-            >
-              {isRunning ? (
-                <>Running Backtest...</>
-              ) : (
-                <>
-                  <Play className="w-4 h-4 mr-2" />
-                  Run Backtest
-                </>
-              )}
-            </Button>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <TextInput id="backtest-name" label="Name" value={name} onChange={setName} />
+          <TextInput id="backtest-ticker" label="Ticker" value={ticker} onChange={value => setTicker(value.toUpperCase())} />
+          <SelectInput label="Model" value={modelType} onChange={value => setModelType(value as ModelType)} options={[
+            ['xgb', 'XGBoost'], ['lstm', 'LSTM'], ['ensemble', 'XGBoost + LSTM'],
+          ]} />
+          <SelectInput label="Prediction horizon" value={horizon} onChange={value => setHorizon(value as Horizon)} options={[
+            ['1d', '1 day'], ['5d', '5 days'], ['20d', '20 days'],
+          ]} />
+          <SelectInput label="Position rule" value={positionRule} onChange={value => setPositionRule(value as PositionRule)} options={[
+            ['long_short', 'Long / Short'], ['long_only', 'Long Only'],
+          ]} />
+          <TextInput id="backtest-start" label="Start date" type="date" value={startDate} onChange={setStartDate} />
+          <TextInput id="backtest-end" label="End date" type="date" value={endDate} onChange={setEndDate} />
+          <NumberInput id="capital" label="Initial capital" value={initialCapital} min={1} max={1000000000} onChange={setInitialCapital} />
+          <NumberInput id="cost" label="Transaction cost (bps)" value={costBps} min={0} max={1000} onChange={setCostBps} />
+          <NumberInput id="bt-train" label="Training window" value={trainWindow} min={250} max={3000} onChange={setTrainWindow} />
+          <NumberInput id="bt-test" label="Test window" value={testWindow} min={5} max={252} onChange={setTestWindow} />
+          <NumberInput id="bt-folds" label="Maximum folds" value={maxFolds} min={1} max={50} onChange={setMaxFolds} />
         </div>
       </Card>
 
-      {/* Results Section */}
-      {hasResults && (
+      {job && (
+        <Card className="p-6 space-y-3">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="font-semibold capitalize">{job.status.replace('_', ' ')}</h2>
+              <p className="text-sm text-muted-foreground">{job.progress_phase || 'Waiting for worker'}</p>
+            </div>
+            <span className="font-mono text-sm">{job.progress_percent}%</span>
+          </div>
+          <Progress value={job.progress_percent} />
+        </Card>
+      )}
+
+      {result && (
         <>
-          {/* Performance Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <MetricCard
-              title="Total Return"
-              value={`${mockResults.totalReturn >= 0 ? '+' : ''}${mockResults.totalReturn.toFixed(1)}%`}
-              changeType={mockResults.totalReturn >= 0 ? 'positive' : 'negative'}
-              icon={DollarSign}
-            />
-            <MetricCard
-              title="CAGR"
-              value={`${mockResults.cagr.toFixed(1)}%`}
-              subtitle="Annualized"
-              icon={Calendar}
-            />
-            <MetricCard
-              title="Sharpe Ratio"
-              value={mockResults.sharpe.toFixed(2)}
-              subtitle="Risk-adjusted"
-            />
-            <MetricCard
-              title="Max Drawdown"
-              value={`${mockResults.maxDrawdown.toFixed(1)}%`}
-              changeType="negative"
-            />
+            {['cum_return', 'sharpe', 'sortino', 'mdd'].map(metric => (
+              <Card key={metric} className="p-5">
+                <div className="text-sm text-muted-foreground mb-1">{metricLabel(metric)}</div>
+                <div className="text-2xl font-bold">{metricValue(metric, result.metrics[metric])}</div>
+              </Card>
+            ))}
           </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <MetricCard
-              title="Sortino Ratio"
-              value={mockResults.sortino.toFixed(2)}
-            />
-            <MetricCard
-              title="Win Rate"
-              value={`${mockResults.winRate.toFixed(1)}%`}
-            />
-            <MetricCard
-              title="Profit Factor"
-              value={mockResults.profitFactor.toFixed(2)}
-            />
-            <MetricCard
-              title="Total Trades"
-              value={mockResults.totalTrades.toString()}
-            />
-          </div>
-
-          {/* Charts and Analysis */}
-          <Tabs defaultValue="equity" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="equity">Equity Curve</TabsTrigger>
-              <TabsTrigger value="long-short">Long/Short Breakdown</TabsTrigger>
-              <TabsTrigger value="trades">Trade History</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="equity" className="space-y-4">
-              <Card className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <h2 className="text-gray-900 dark:text-white mb-1">Equity Curve</h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Strategy performance vs benchmark
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    <Download className="w-4 h-4 mr-2" />
-                    Export
-                  </Button>
-                </div>
-                <EquityCurveChart />
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="long-short" className="space-y-4">
-              <Card className="p-6">
-                <h2 className="text-gray-900 dark:text-white mb-6">Long/Short Attribution</h2>
-                <LongShortEquityChart />
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="trades" className="space-y-4">
-              <Card className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-gray-900 dark:text-white">Trade History</h2>
-                  <Button variant="outline" size="sm">
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Trades
-                  </Button>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Ticker</TableHead>
-                      <TableHead>Side</TableHead>
-                      <TableHead>Entry</TableHead>
-                      <TableHead>Exit</TableHead>
-                      <TableHead>Return</TableHead>
-                      <TableHead className="text-right">P&L</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {mockTrades.map((trade, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell className="text-gray-600 dark:text-gray-400">
-                          {new Date(trade.date).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-gray-900 dark:text-white">
-                          {trade.ticker}
-                        </TableCell>
-                        <TableCell>
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            trade.side === 'LONG'
-                              ? 'bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-400'
-                              : 'bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-400'
-                          }`}>
-                            {trade.side}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-gray-600 dark:text-gray-400">
-                          ${trade.entry.toFixed(2)}
-                        </TableCell>
-                        <TableCell className="text-gray-600 dark:text-gray-400">
-                          ${trade.exit.toFixed(2)}
-                        </TableCell>
-                        <TableCell className={trade.return >= 0 ? 'text-teal-600' : 'text-red-600'}>
-                          {trade.return >= 0 ? '+' : ''}{trade.return.toFixed(1)}%
-                        </TableCell>
-                        <TableCell className={`text-right ${trade.pnl >= 0 ? 'text-teal-600' : 'text-red-600'}`}>
-                          ${trade.pnl >= 0 ? '+' : ''}{trade.pnl.toFixed(0)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="analytics" className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="p-6">
-                  <h3 className="text-gray-900 dark:text-white mb-4">Risk Metrics</h3>
-                  <div className="space-y-3">
-                    <MetricRow label="Annualized Volatility" value="15.2%" />
-                    <MetricRow label="Downside Deviation" value="9.8%" />
-                    <MetricRow label="VaR (95%)" value="-2.4%" />
-                    <MetricRow label="CVaR (95%)" value="-3.8%" />
-                    <MetricRow label="Beta" value="0.72" />
-                    <MetricRow label="Alpha" value="5.2%" />
-                  </div>
-                </Card>
-
-                <Card className="p-6">
-                  <h3 className="text-gray-900 dark:text-white mb-4">Trade Statistics</h3>
-                  <div className="space-y-3">
-                    <MetricRow label="Avg Win" value="+2.8%" />
-                    <MetricRow label="Avg Loss" value="-1.5%" />
-                    <MetricRow label="Largest Win" value="+8.4%" />
-                    <MetricRow label="Largest Loss" value="-4.2%" />
-                    <MetricRow label="Avg Hold Time" value="3.2 days" />
-                    <MetricRow label="Turnover" value="145%" />
-                  </div>
-                </Card>
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Equity Curve</h2>
+            <EquityCurveChart data={chartData} valueFormat="currency" />
+          </Card>
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold">Position Ledger</h2>
+                <p className="text-sm text-muted-foreground">One record per realized return period</p>
               </div>
-            </TabsContent>
-          </Tabs>
+              <Button variant="outline" onClick={() => downloadCSV(result.ledger, `${result.ticker.toLowerCase()}-backtest-ledger`)}>
+                <Download className="w-4 h-4 mr-2" />Export CSV
+              </Button>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>Date</TableHead><TableHead>Probability</TableHead><TableHead>Position</TableHead>
+                  <TableHead>Gross Return</TableHead><TableHead>Cost</TableHead><TableHead>Net Return</TableHead><TableHead>Equity</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>{result.ledger.slice(-100).reverse().map(row => (
+                  <TableRow key={row.date}>
+                    <TableCell>{row.date}</TableCell>
+                    <TableCell>{formatNumber(row.probability)}</TableCell>
+                    <TableCell>{formatNumber(row.position)}</TableCell>
+                    <TableCell>{formatPercent(row.gross_return)}</TableCell>
+                    <TableCell>{formatPercent(row.transaction_cost)}</TableCell>
+                    <TableCell>{formatPercent(row.net_return)}</TableCell>
+                    <TableCell>{row.equity === null ? '-' : `$${row.equity.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}</TableCell>
+                  </TableRow>
+                ))}</TableBody>
+              </Table>
+            </div>
+          </Card>
         </>
       )}
     </div>
   );
 }
 
-function MetricRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between py-2 border-b border-gray-200 dark:border-gray-800 last:border-0">
-      <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
-      <span className="text-gray-900 dark:text-white">{value}</span>
-    </div>
-  );
+function isStrategyResult(value: unknown): value is StrategyBacktestSummary {
+  return Boolean(value && typeof value === 'object' && 'ledger' in value && 'position_rule' in value);
+}
+
+function mergeCurves(result: StrategyBacktestSummary) {
+  const benchmark = new Map(result.benchmark_curve.map(point => [point.date, point.value]));
+  return result.equity_curve.map(point => ({ date: point.date, strategy: point.value, benchmark: benchmark.get(point.date) }));
+}
+
+function TextInput({ id, label, onChange, type = 'text', value }: { id: string; label: string; onChange: (value: string) => void; type?: string; value: string }) {
+  return <div className="space-y-2"><Label htmlFor={id}>{label}</Label><Input id={id} type={type} value={value} onChange={event => onChange(event.target.value)} /></div>;
+}
+
+function NumberInput({ id, label, max, min, onChange, value }: { id: string; label: string; max: number; min: number; onChange: (value: number) => void; value: number }) {
+  return <div className="space-y-2"><Label htmlFor={id}>{label}</Label><Input id={id} type="number" min={min} max={max} value={value} onChange={event => onChange(Number(event.target.value))} /></div>;
+}
+
+function SelectInput({ label, onChange, options, value }: { label: string; onChange: (value: string) => void; options: string[][]; value: string }) {
+  return <div className="space-y-2"><Label>{label}</Label><Select value={value} onValueChange={onChange}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{options.map(([option, text]) => <SelectItem key={option} value={option}>{text}</SelectItem>)}</SelectContent></Select></div>;
+}
+
+function metricLabel(value: string) {
+  return value.split('_').map(part => part[0].toUpperCase() + part.slice(1)).join(' ');
+}
+
+function metricValue(metric: string, value: string | number | boolean | null | undefined) {
+  if (typeof value !== 'number') return '-';
+  return metric === 'cum_return' || metric === 'mdd' ? `${(value * 100).toFixed(1)}%` : value.toFixed(2);
+}
+
+function formatNumber(value: number | null) {
+  return value === null ? '-' : value.toFixed(3);
+}
+
+function formatPercent(value: number | null) {
+  return value === null ? '-' : `${(value * 100).toFixed(2)}%`;
 }

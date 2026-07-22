@@ -7,9 +7,26 @@ from xgboost import XGBClassifier
 
 from .factors import compute_alpha_factors
 from .models import feature_columns, train_xgb_prob
+from .lstm import (
+    FeatureScaler,
+    build_prediction_sequences,
+    build_training_sequences,
+    predict_probabilities,
+    train_lstm_classifier,
+)
 from .walkforward import walk_forward_splits
 from .backtest import backtest_prob_strategy
 from .stats import _to_series, information_ratio, sharpe_ratio
+
+
+def _metric_summary(backtest: dict) -> dict:
+    metrics = {}
+    for key, value in backtest.items():
+        if isinstance(value, np.generic):
+            value = value.item()
+        if isinstance(value, (str, bool, int, float)) or value is None:
+            metrics[key] = value
+    return metrics
 
 
 def run_walkforward_xgb(
@@ -27,6 +44,8 @@ def run_walkforward_xgb(
     df_all: pd.DataFrame | None = None,
     # NEW: optionally cap number of walk-forward folds (use most recent folds first)
     max_folds: int | None = None,
+    position_rule: str = "long_short",
+    cost_bps: float = 5.0,
 ) -> dict:
     """
     Walk-forward XGB on tabular factors. Returns metrics, equity_curve, daily_returns, predictions, feature_importance.
@@ -44,7 +63,10 @@ def run_walkforward_xgb(
     if horizon not in y_col_map:
         raise ValueError(f"Unsupported horizon '{horizon}' (use '1d','5d','20d').")
     y_col = y_col_map[horizon]
-    ret_col = f"target_ret_{horizon}"
+    # A horizon controls the prediction label, while the strategy still realizes
+    # one tradable daily return at a time. Using overlapping multi-day targets as
+    # daily PnL materially overstates performance for 5d and 20d models.
+    ret_col = "target_ret_1d"
 
     # features
     feats_all = feature_columns(df_all)
@@ -149,16 +171,275 @@ def run_walkforward_xgb(
         ret_col=ret_col,
         threshold=0.5,
         max_leverage=1.0,
-        cost_bps=5.0,
+        cost_bps=cost_bps,
+        position_rule=position_rule,
     )
 
     return dict(
-        metrics={k: v for k, v in bt.items() if k not in ("equity_curve", "series")},
+        metrics=_metric_summary(bt),
         equity_curve=bt["equity_curve"],
         daily_returns=bt["series"],
         predictions=df_all[[f"prob_up_{horizon}"]],
         feature_importance=feat_imp_out,
+        positions=bt["positions"],
+        gross_returns=bt["gross_returns"],
+        turnover_series=bt["turnover_series"],
+        transaction_costs=bt["transaction_costs"],
     )
+
+
+def run_walkforward_lstm(
+    px: pd.DataFrame,
+    spy: pd.Series | None = None,
+    vix: pd.Series | None = None,
+    sector: pd.Series | None = None,
+    horizon: str = "1d",
+    train_window: int = 750,
+    test_window: int = 63,
+    *,
+    params: dict | None = None,
+    df_all: pd.DataFrame | None = None,
+    max_folds: int | None = None,
+    position_rule: str = "long_short",
+    cost_bps: float = 5.0,
+) -> dict:
+    if df_all is None:
+        df_all = compute_alpha_factors(px, spy=spy, vix=vix, sector=sector)
+    else:
+        df_all = df_all.copy()
+
+    y_col_map = {"1d": "y_up_1d", "5d": "y_up_5d", "20d": "y_up_20d"}
+    if horizon not in y_col_map:
+        raise ValueError(f"Unsupported horizon '{horizon}' (use '1d','5d','20d').")
+    y_col = y_col_map[horizon]
+    return_col = "target_ret_1d"
+    features = [column for column in feature_columns(df_all) if column in df_all.columns]
+    prediction_col = f"prob_up_{horizon}"
+    if not features:
+        return {
+            "metrics": {"error": "No valid numeric features found after sanitization."},
+            "equity_curve": pd.Series(dtype="float"),
+            "daily_returns": pd.Series(dtype="float"),
+            "predictions": pd.DataFrame(columns=[prediction_col]),
+            "feature_importance": [],
+            "fold_metrics": [],
+        }
+
+    data = df_all[features + [y_col]].dropna().copy()
+    if data.empty or len(data) < train_window + test_window:
+        train_window = max(250, int(len(data) * 0.6)) if len(data) else 250
+        test_window = max(21, int(len(data) * 0.1)) if len(data) else 21
+    splits = list(walk_forward_splits(data, train_window, test_window, min_train=250))
+    if isinstance(max_folds, int) and max_folds > 0:
+        splits = splits[-max_folds:]
+    if not splits:
+        return {
+            "metrics": {"error": "Not enough data to run walk-forward split with current windows."},
+            "equity_curve": pd.Series(dtype="float"),
+            "daily_returns": pd.Series(dtype="float"),
+            "predictions": pd.DataFrame(columns=[prediction_col]),
+            "feature_importance": [],
+            "fold_metrics": [],
+        }
+
+    configuration = dict(params or {})
+    sequence_length = int(configuration.pop("sequence_length", 20))
+    if sequence_length < 2 or sequence_length > 252:
+        raise ValueError("sequence_length must be between 2 and 252")
+    allowed_parameters = {
+        "hidden_size",
+        "num_layers",
+        "dropout",
+        "learning_rate",
+        "batch_size",
+        "max_epochs",
+        "patience",
+        "seed",
+    }
+    unknown_parameters = set(configuration) - allowed_parameters
+    if unknown_parameters:
+        raise ValueError(f"Unsupported LSTM parameters: {sorted(unknown_parameters)}")
+
+    probabilities = pd.Series(index=data.index, dtype="float")
+    fold_metrics = []
+    for fold_number, (training_indices, test_indices) in enumerate(splits, start=1):
+        training = data.iloc[training_indices]
+        test = data.iloc[test_indices]
+        validation_start = max(sequence_length, int(len(training) * 0.8))
+        if validation_start >= len(training):
+            validation_start = len(training) - 1
+        inner_training = training.iloc[:validation_start]
+        validation = training.iloc[validation_start:]
+        if len(inner_training) < sequence_length or validation.empty:
+            raise ValueError("Training window is too short for the requested LSTM sequence")
+
+        scaler = FeatureScaler.fit(inner_training[features].to_numpy())
+        inner_values = scaler.transform(inner_training[features].to_numpy())
+        validation_values = scaler.transform(validation[features].to_numpy())
+        training_sequences, training_labels = build_training_sequences(
+            inner_values,
+            inner_training[y_col].to_numpy(),
+            sequence_length,
+        )
+        validation_sequences = build_prediction_sequences(
+            inner_values,
+            validation_values,
+            sequence_length,
+        )
+        trained = train_lstm_classifier(
+            training_sequences=training_sequences,
+            training_labels=training_labels,
+            validation_sequences=validation_sequences,
+            validation_labels=validation[y_col].to_numpy(dtype=np.float32),
+            **configuration,
+        )
+
+        history_values = scaler.transform(training[features].to_numpy())
+        test_values = scaler.transform(test[features].to_numpy())
+        test_sequences = build_prediction_sequences(
+            history_values,
+            test_values,
+            sequence_length,
+        )
+        probabilities.loc[test.index] = predict_probabilities(trained.model, test_sequences)
+        fold_metrics.append({
+            "fold": fold_number,
+            "test_rows": len(test),
+            "epochs_trained": trained.epochs_trained,
+            "validation_loss": trained.validation_loss,
+        })
+
+    df_all[prediction_col] = probabilities.reindex(df_all.index)
+    if return_col not in df_all.columns:
+        return {
+            "metrics": {"error": f"Missing required column '{return_col}' after factor computation."},
+            "equity_curve": pd.Series(dtype="float"),
+            "daily_returns": pd.Series(dtype="float"),
+            "predictions": df_all[[prediction_col]],
+            "feature_importance": [],
+            "fold_metrics": fold_metrics,
+        }
+
+    backtest_data = df_all.dropna(subset=[prediction_col, return_col]).copy()
+    backtest = backtest_prob_strategy(
+        backtest_data,
+        prob_col=prediction_col,
+        ret_col=return_col,
+        threshold=0.5,
+        max_leverage=1.0,
+        cost_bps=cost_bps,
+        position_rule=position_rule,
+    )
+    return {
+        "metrics": _metric_summary(backtest),
+        "equity_curve": backtest["equity_curve"],
+        "daily_returns": backtest["series"],
+        "predictions": df_all[[prediction_col]],
+        "feature_importance": [],
+        "fold_metrics": fold_metrics,
+        "positions": backtest["positions"],
+        "gross_returns": backtest["gross_returns"],
+        "turnover_series": backtest["turnover_series"],
+        "transaction_costs": backtest["transaction_costs"],
+    }
+
+
+def run_walkforward_ensemble(
+    px: pd.DataFrame,
+    spy: pd.Series | None = None,
+    vix: pd.Series | None = None,
+    sector: pd.Series | None = None,
+    horizon: str = "1d",
+    train_window: int = 750,
+    test_window: int = 63,
+    *,
+    weights: dict[str, float] | None = None,
+    xgb_params: dict | None = None,
+    lstm_params: dict | None = None,
+    df_all: pd.DataFrame | None = None,
+    max_folds: int | None = None,
+    position_rule: str = "long_short",
+    cost_bps: float = 5.0,
+) -> dict:
+    component_weights = weights or {"xgb": 0.5, "lstm": 0.5}
+    if set(component_weights) != {"xgb", "lstm"}:
+        raise ValueError("Ensemble weights must define xgb and lstm")
+    if any(value < 0 for value in component_weights.values()) or not np.isclose(
+        sum(component_weights.values()),
+        1.0,
+    ):
+        raise ValueError("Ensemble weights must be nonnegative and sum to 1")
+
+    if df_all is None:
+        df_all = compute_alpha_factors(px, spy=spy, vix=vix, sector=sector)
+    prediction_col = f"prob_up_{horizon}"
+    common_arguments = {
+        "px": px,
+        "spy": spy,
+        "vix": vix,
+        "sector": sector,
+        "horizon": horizon,
+        "train_window": train_window,
+        "test_window": test_window,
+        "max_folds": max_folds,
+        "position_rule": position_rule,
+        "cost_bps": cost_bps,
+    }
+    xgb_result = run_walkforward_xgb(
+        **common_arguments,
+        params=xgb_params,
+        df_all=df_all.copy(),
+    )
+    lstm_result = run_walkforward_lstm(
+        **common_arguments,
+        params=lstm_params,
+        df_all=df_all.copy(),
+    )
+
+    xgb_probabilities = xgb_result.get("predictions", pd.DataFrame()).get(prediction_col)
+    lstm_probabilities = lstm_result.get("predictions", pd.DataFrame()).get(prediction_col)
+    if xgb_probabilities is None or lstm_probabilities is None:
+        raise ValueError("Both component models must produce probabilities")
+    aligned = pd.concat(
+        [
+            xgb_probabilities.rename(f"xgb_{prediction_col}"),
+            lstm_probabilities.rename(f"lstm_{prediction_col}"),
+        ],
+        axis=1,
+        join="inner",
+    ).dropna()
+    aligned[prediction_col] = (
+        component_weights["xgb"] * aligned[f"xgb_{prediction_col}"]
+        + component_weights["lstm"] * aligned[f"lstm_{prediction_col}"]
+    )
+
+    return_col = "target_ret_1d"
+    backtest_data = df_all[[return_col]].join(aligned[[prediction_col]], how="inner").dropna()
+    backtest = backtest_prob_strategy(
+        backtest_data,
+        prob_col=prediction_col,
+        ret_col=return_col,
+        threshold=0.5,
+        max_leverage=1.0,
+        cost_bps=cost_bps,
+        position_rule=position_rule,
+    )
+    return {
+        "metrics": _metric_summary(backtest),
+        "equity_curve": backtest["equity_curve"],
+        "daily_returns": backtest["series"],
+        "predictions": aligned,
+        "feature_importance": xgb_result.get("feature_importance", []),
+        "component_metrics": {
+            "xgb": xgb_result.get("metrics", {}),
+            "lstm": lstm_result.get("metrics", {}),
+        },
+        "weights": component_weights,
+        "positions": backtest["positions"],
+        "gross_returns": backtest["gross_returns"],
+        "turnover_series": backtest["turnover_series"],
+        "transaction_costs": backtest["transaction_costs"],
+    }
 
 
 # ===== Walk-forward XGB sweep =====
@@ -282,6 +563,7 @@ def persist_final_xgb_model(
     params: dict,
     model_dir: str = "models",
     train_window: int = 750,
+    storage_user_id: str | None = None,
 ) -> dict:
     """
     Fit a final XGB on the most recent `train_window` rows and save it.
@@ -342,4 +624,29 @@ def persist_final_xgb_model(
     with open(meta_path, "w") as f:
         json.dump(meta, f, indent=2)
 
-    return {"model_path": model_path, "meta_path": meta_path}
+    paths = {"model_path": model_path, "meta_path": meta_path}
+    if storage_user_id:
+        from ..database import get_admin_client
+
+        storage = get_admin_client().storage.from_("models")
+        storage_prefix = f"{storage_user_id}/legacy-xgb"
+        storage_model_path = f"{storage_prefix}/{os.path.basename(model_path)}"
+        storage_meta_path = f"{storage_prefix}/{os.path.basename(meta_path)}"
+        with open(model_path, "rb") as model_file:
+            storage.upload(
+                storage_model_path,
+                model_file.read(),
+                {"content-type": "application/json", "upsert": "true"},
+            )
+        with open(meta_path, "rb") as meta_file:
+            storage.upload(
+                storage_meta_path,
+                meta_file.read(),
+                {"content-type": "application/json", "upsert": "true"},
+            )
+        paths.update({
+            "storage_model_path": storage_model_path,
+            "storage_meta_path": storage_meta_path,
+        })
+
+    return paths

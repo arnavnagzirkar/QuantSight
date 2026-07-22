@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { User, Session, AuthError } from '@supabase/supabase-js'
+import type { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/services/supabase'
+import { authAPI } from '@/services/api'
 
 interface UserProfile {
   id: string
@@ -14,6 +15,10 @@ interface UserProfile {
   created_at: string
 }
 
+interface AuthResult {
+  error: Error | null
+}
+
 interface AuthContextType {
   user: User | null
   profile: UserProfile | null
@@ -25,10 +30,10 @@ interface AuthContextType {
     use_case: string
     company_name?: string
     role?: string
-  }) => Promise<{ error: AuthError | null }>
-  signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
-  signInWithGoogle: () => Promise<{ error: AuthError | null }>
-  signInWithGithub: () => Promise<{ error: AuthError | null }>
+  }) => Promise<AuthResult>
+  signIn: (identifier: string, password: string) => Promise<AuthResult>
+  signInWithGoogle: () => Promise<AuthResult>
+  signInWithGithub: () => Promise<AuthResult>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
@@ -51,8 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error
       setProfile(data)
-    } catch (error) {
-      console.error('Error fetching profile:', error)
+    } catch {
       setProfile(null)
     }
   }
@@ -64,29 +68,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    console.log('🔵 [AuthContext] Initializing auth')
-    
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('🔴 [AuthContext] Session fetch error:', error)
-      }
-      console.log('🔵 [AuthContext] Initial session:', session?.user?.id || 'none')
+      if (error) setLoading(false)
       setSession(session)
       setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-      }
+      if (session?.user) void fetchProfile(session.user.id)
       setLoading(false)
     })
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('🔵 [AuthContext] Auth event:', event, 'user:', session?.user?.id || 'none')
-      
-      // Only clear on explicit signout
       if (event === 'SIGNED_OUT') {
         setSession(null)
         setUser(null)
@@ -98,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session)
       setUser(session?.user ?? null)
       if (session?.user) {
-        fetchProfile(session.user.id)
+        void fetchProfile(session.user.id)
       } else {
         setProfile(null)
       }
@@ -119,11 +111,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       role?: string
     }
   ) => {
-    console.log('🔵 [AuthContext] signUp called with:', { email, metadata })
-    
     try {
-      console.log('🔵 [AuthContext] Calling supabase.auth.signUp...')
-      const { data, error } = await supabase.auth.signUp({
+      const availability = await authAPI.getUsernameAvailability(metadata.username)
+      if (!availability.data.available) {
+        return { error: new Error('Username is already taken') }
+      }
+
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -131,105 +125,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
-
-      console.log('🔵 [AuthContext] signUp response:', { data, error })
-
-      if (error) {
-        console.error('🔴 [AuthContext] signUp error:', error)
-        return { error }
-      }
-
-      if (data.user) {
-        console.log('🟢 [AuthContext] User created:', data.user.id)
-        console.log('🟢 [AuthContext] User details:', {
-          id: data.user.id,
-          email: data.user.email,
-          email_confirmed_at: data.user.email_confirmed_at,
-          user_metadata: data.user.user_metadata
-        })
-        console.log('✉️ [AuthContext] Profile will be created after email verification')
-      } else {
-        console.warn('⚠️ [AuthContext] No user returned from signUp')
-      }
-
       return { error }
     } catch (err) {
-      console.error('🔴 [AuthContext] signUp exception:', err)
-      return { error: err as any }
+      return { error: err instanceof Error ? err : new Error('Registration failed') }
     }
   }
 
-  const signIn = async (emailOrUsername: string, password: string) => {
-    console.log('🔵 [AuthContext] signIn called with:', emailOrUsername)
-    
-    let emailToUse = emailOrUsername
-    
-    // Check if input is an email (contains @) or username
-    if (!emailOrUsername.includes('@')) {
-      console.log('🔵 [AuthContext] Input is username, looking up email')
-      // Look up email from username
-      const { data: profile, error: lookupError } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('username', emailOrUsername)
-        .single()
-      
-      if (lookupError || !profile) {
-        console.error('🔴 [AuthContext] Username lookup failed:', lookupError)
-        return { error: { message: 'Invalid username or password' } as any }
-      }
-      
-      emailToUse = profile.email
-      console.log('🟢 [AuthContext] Found email for username:', emailToUse)
+  const signIn = async (identifier: string, password: string): Promise<AuthResult> => {
+    try {
+      const response = await authAPI.passwordSignIn(identifier, password)
+      const { error } = await supabase.auth.setSession({
+        access_token: response.data.access_token,
+        refresh_token: response.data.refresh_token,
+      })
+      return { error }
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error('Sign in failed') }
     }
-    
-    console.log('🔵 [AuthContext] Signing in with email:', emailToUse)
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: emailToUse,
-      password,
-    })
-    console.log('🔵 [AuthContext] signIn response:', { data, error })
-    if (error) {
-      console.error('🔴 [AuthContext] signIn error:', error)
-    } else {
-      console.log('🟢 [AuthContext] signIn successful')
-    }
-    return { error }
   }
 
   const signInWithGoogle = async () => {
-    console.log('🔵 [AuthContext] signInWithGoogle called')
-    console.log('🔵 [AuthContext] Redirect URL:', `${window.location.origin}/auth/callback`)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
-    console.log('🔵 [AuthContext] Google OAuth result:', { error })
-    if (error) {
-      console.error('❌ [AuthContext] Google OAuth error:', error.message, error)
-    } else {
-      console.log('✅ [AuthContext] Google OAuth initiated successfully')
-    }
     return { error }
   }
 
   const signInWithGithub = async () => {
-    console.log('🟣 [AuthContext] signInWithGithub called')
-    console.log('🟣 [AuthContext] Redirect URL:', `${window.location.origin}/auth/callback`)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'github',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     })
-    console.log('🟣 [AuthContext] GitHub OAuth result:', { error })
-    if (error) {
-      console.error('❌ [AuthContext] GitHub OAuth error:', error.message, error)
-    } else {
-      console.log('✅ [AuthContext] GitHub OAuth initiated successfully')
-    }
     return { error }
   }
 

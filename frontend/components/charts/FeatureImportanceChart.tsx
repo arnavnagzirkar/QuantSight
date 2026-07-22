@@ -1,24 +1,20 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-const data = [
-  { feature: 'momentum_20d', importance: 0.185 },
-  { feature: 'volatility_20d', importance: 0.142 },
-  { feature: 'rsi_14', importance: 0.128 },
-  { feature: 'volume_ratio', importance: 0.105 },
-  { feature: 'bb_width', importance: 0.095 },
-  { feature: 'macd', importance: 0.087 },
-  { feature: 'atr', importance: 0.075 },
-  { feature: 'momentum_5d', importance: 0.068 },
-  { feature: 'price_vs_ma20', importance: 0.055 },
-  { feature: 'stoch_k', importance: 0.042 },
-].sort((a, b) => b.importance - a.importance);
+interface FeatureImportanceChartProps {
+  data: Array<{ feature: string; importance: number }>;
+}
 
-export function FeatureImportanceChart() {
+export function FeatureImportanceChart({ data }: FeatureImportanceChartProps) {
+  const sortedData = [...data].sort((a, b) => b.importance - a.importance).slice(0, 15);
+  if (sortedData.length === 0) {
+    return <div className="h-80 flex items-center justify-center text-muted-foreground">Feature importance is not available for this model</div>;
+  }
+
   return (
     <div className="h-80">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart 
-          data={data} 
+          data={sortedData}
           layout="vertical"
           margin={{ top: 5, right: 30, left: 120, bottom: 5 }}
         >
@@ -42,7 +38,7 @@ export function FeatureImportanceChart() {
               borderRadius: '8px',
               color: '#fff'
             }}
-            formatter={(value: any) => [value.toFixed(4), 'Importance']}
+            formatter={(value: number) => [value.toFixed(4), 'Importance']}
           />
           <Bar dataKey="importance" fill="#14b8a6" radius={[0, 4, 4, 0]} />
         </BarChart>

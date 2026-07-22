@@ -68,37 +68,38 @@ export default function LandingPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
+    <div className="min-h-screen overflow-x-hidden bg-gradient-to-b from-background to-secondary/20">
       {/* Navigation */}
       <nav className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="container mx-auto flex items-center justify-between gap-2 px-3 py-4 sm:px-4">
           <div className="flex items-center space-x-2">
             <TrendingUp className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold">QuantSight</span>
+            <span className="text-lg font-bold sm:text-xl">QuantSight</span>
           </div>
-          <div className="flex items-center space-x-4">
-            <Button variant="ghost" onClick={() => navigate('/login')}>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-4">
+            <Button className="px-2 sm:px-4" variant="ghost" onClick={() => navigate('/login')}>
               Sign In
             </Button>
-            <Button onClick={() => navigate('/register')}>
-              Get Started <ArrowRight className="ml-2 h-4 w-4" />
+            <Button aria-label="Get started" className="px-3 sm:px-4" onClick={() => navigate('/register')}>
+              <span className="hidden sm:inline">Get Started</span>
+              <ArrowRight className="h-4 w-4 sm:ml-2" />
             </Button>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section className="container mx-auto px-4 py-20 text-center">
+      <section className="container mx-auto px-4 py-14 text-center sm:py-20">
         <div className="max-w-4xl mx-auto space-y-6">
-          <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
+          <h1 className="text-4xl font-bold leading-tight sm:text-5xl md:text-6xl">
             Intelligent Quantitative
             <span className="text-primary block mt-2">Research Platform</span>
           </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <p className="mx-auto max-w-2xl text-base text-muted-foreground sm:text-xl">
             Transform market data into actionable insights with machine learning-powered 
             analysis. Backtest strategies, explore factors, and make data-driven investment decisions.
           </p>
-          <div className="flex items-center justify-center gap-4 pt-4">
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
             <Button size="lg" onClick={() => navigate('/register')}>
               Start Free Trial <ArrowRight className="ml-2 h-5 w-5" />
             </Button>

@@ -1,17 +1,19 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-const data = [
-  { component: 'PC1', variance: 32.5 },
-  { component: 'PC2', variance: 18.3 },
-  { component: 'PC3', variance: 12.7 },
-  { component: 'PC4', variance: 8.9 },
-  { component: 'PC5', variance: 6.2 },
-  { component: 'PC6', variance: 4.8 },
-  { component: 'PC7', variance: 3.6 },
-  { component: 'PC8', variance: 2.9 },
-];
+interface PCAChartProps {
+  explainedVariance: number[];
+}
 
-export function PCAChart() {
+export function PCAChart({ explainedVariance }: PCAChartProps) {
+  const data = explainedVariance.map((variance, index) => ({
+    component: `PC${index + 1}`,
+    variance: variance * 100,
+  }));
+
+  if (data.length === 0) {
+    return <div className="h-64 flex items-center justify-center text-muted-foreground">No PCA data available</div>;
+  }
+
   return (
     <div className="h-64">
       <ResponsiveContainer width="100%" height="100%">
@@ -34,7 +36,7 @@ export function PCAChart() {
               borderRadius: '8px',
               color: '#fff'
             }}
-            formatter={(value: any) => [`${value.toFixed(1)}%`, 'Explained Variance']}
+            formatter={(value: number) => [`${value.toFixed(1)}%`, 'Explained Variance']}
           />
           <Bar dataKey="variance" radius={[4, 4, 0, 0]}>
             {data.map((_entry, index) => (

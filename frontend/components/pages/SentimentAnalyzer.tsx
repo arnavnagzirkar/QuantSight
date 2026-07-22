@@ -1,121 +1,48 @@
-import { useState, useEffect } from 'react';
-import { MessageSquare, TrendingUp, TrendingDown, Minus, AlertCircle, Search, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
+import { ExternalLink, MessageSquare, Search, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { SentimentTrendChart } from '../charts/SentimentTrendChart';
-import { Input } from '../ui/input';
+import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { sentimentAPI } from '../../services/api';
+import { usePersistentAPI } from '../../hooks/usePersistentAPI';
+import { useUserPersistentState } from '../../hooks/usePersistentState';
+import type { APIEnvelope, SentimentAnalysis } from '../../types/api';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-
-interface Headline {
-  headline: string;  // Changed from title to headline to match backend
-  sentiment: string;
-  confidence: number | string;  // Backend returns string like "75.23%"
-  source?: string;
-  publishedAt?: string;
-}
-
-interface SentimentData {
-  stock_info?: {
-    ticker: string;
-    current_price: string;
-  };
-  sentiment_analysis?: {
-    engine: string;
-    total_headlines_analyzed: number;
-    details: Headline[];
-  };
+function sevenDaysAgo() {
+  const date = new Date();
+  date.setDate(date.getDate() - 7);
+  return date.toISOString().slice(0, 10);
 }
 
 export function SentimentAnalyzer() {
-  const [ticker, setTicker] = useState('AAPL');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<SentimentData | null>(null);
-  const [headlines, setHeadlines] = useState<Headline[]>([]);
+  const [ticker, setTicker] = useUserPersistentState('sentiment-analyzer:ticker', 'AAPL');
+  const [startDate, setStartDate] = useUserPersistentState('sentiment-analyzer:start-date', sevenDaysAgo);
+  const [endDate, setEndDate] = useUserPersistentState('sentiment-analyzer:end-date', () => new Date().toISOString().slice(0, 10));
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const sentimentRequest = usePersistentAPI<APIEnvelope<SentimentAnalysis>>('sentiment-analyzer', sentimentAPI.getTickerSentiment);
+  const analysis = sentimentRequest.data?.data;
 
-  const fetchSentiment = async (symbol: string) => {
-    console.log('[SentimentAnalyzer] Starting fetch for ticker:', symbol);
-    console.log('[SentimentAnalyzer] API Base URL:', API_BASE);
-    
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const url = `${API_BASE}/analyze?ticker=${symbol}`;
-      console.log('[SentimentAnalyzer] Fetching from URL:', url);
-      
-      const response = await fetch(url);
-      console.log('[SentimentAnalyzer] Response status:', response.status);
-      console.log('[SentimentAnalyzer] Response ok:', response.ok);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('[SentimentAnalyzer] Error response:', errorData);
-        throw new Error(errorData.error || 'Failed to fetch sentiment data');
-      }
-      
-      const result: SentimentData = await response.json();
-      console.log('[SentimentAnalyzer] Success! Received data:', result);
-      console.log('[SentimentAnalyzer] Headlines count:', result.sentiment_analysis?.details?.length || 0);
-      
-      setData(result);
-      setHeadlines(result.sentiment_analysis?.details || []);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-      console.error('[SentimentAnalyzer] Fetch error:', err);
-      console.error('[SentimentAnalyzer] Error message:', errorMessage);
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-      console.log('[SentimentAnalyzer] Fetch complete');
+  const handleAnalyze = async () => {
+    const normalizedTicker = ticker.trim().toUpperCase();
+    if (!/^[A-Z0-9.^-]{1,15}$/.test(normalizedTicker)) {
+      setValidationError('Enter a valid ticker symbol.');
+      return;
     }
-  };
-
-  useEffect(() => {
-    console.log('[SentimentAnalyzer] Component mounted, auto-fetching for:', ticker);
-    fetchSentiment(ticker);
-  }, []);
-
-  const handleSearch = () => {
-    if (ticker.trim()) {
-      fetchSentiment(ticker.toUpperCase().trim());
+    if (startDate > endDate) {
+      setValidationError('Start date must be on or before end date.');
+      return;
     }
+
+    setTicker(normalizedTicker);
+    setValidationError(null);
+    await sentimentRequest.execute(normalizedTicker, {
+      start_date: startDate,
+      end_date: endDate,
+      limit: 100,
+    });
   };
-
-  const sentimentCounts = headlines.reduce(
-    (acc, h) => {
-      if (h.sentiment === 'positive' || h.sentiment === 'POSITIVE') acc.positive++;
-      else if (h.sentiment === 'negative' || h.sentiment === 'NEGATIVE') acc.negative++;
-      else acc.neutral++;
-      return acc;
-    },
-    { positive: 0, negative: 0, neutral: 0 }
-  );
-
-  // Parse confidence - backend returns string like "75.23%" or number
-  const parseConfidence = (conf: number | string): number => {
-    if (typeof conf === 'string') {
-      return parseFloat(conf.replace('%', '')) || 0;
-    }
-    return conf * 100;
-  };
-
-  // Format date to readable format
-  const formatDate = (dateStr?: string): string => {
-    if (!dateStr) return '';
-    try {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-    } catch {
-      return dateStr;
-    }
-  };
-
-  const avgConfidence = headlines.length > 0
-    ? Math.round(headlines.reduce((sum, h) => sum + parseConfidence(h.confidence), 0) / headlines.length)
-    : 0;
-
-  const usingFallback = data?.sentiment_analysis?.engine === 'VADER';
 
   return (
     <div className="space-y-6">
@@ -123,59 +50,57 @@ export function SentimentAnalyzer() {
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">Sentiment Analyzer</h1>
           <p className="text-muted-foreground">
-            Real-time news sentiment analysis powered by NewsAPI
+            Headlines sentiment classification and trend analysis
           </p>
         </div>
-        {usingFallback && (
-          <div className="flex items-center gap-2 px-3 py-2 bg-chart-3/10 text-chart-3 rounded-lg text-sm border border-chart-3/20">
-            <AlertCircle className="w-4 h-4" />
-            <span>Using VADER fallback</span>
-          </div>
-        )}
+        <div className="px-3 py-2 bg-primary/10 text-primary rounded-lg text-sm border border-primary/20">
+          VADER classifier
+        </div>
       </div>
 
-      <div className="bg-card border border-border rounded-lg p-4 shadow-sm">
-        <div className="flex gap-2">
-          <Input
-            type="text"
-            placeholder="Enter ticker symbol (e.g., AAPL, TSLA, MSFT)"
-            value={ticker}
-            onChange={(e) => setTicker(e.target.value.toUpperCase())}
-            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            className="flex-1"
-          />
-          <Button onClick={handleSearch} disabled={loading}>
-            {loading ? (
-              <>Loading...</>
-            ) : (
-              <>
-                <Search className="w-4 h-4 mr-2" />
-                Analyze
-              </>
-            )}
+      <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_auto] gap-4 items-end">
+          <div className="space-y-2">
+            <Label htmlFor="sentiment-ticker">Ticker</Label>
+            <Input
+              id="sentiment-ticker"
+              value={ticker}
+              maxLength={15}
+              onChange={(event) => setTicker(event.target.value.toUpperCase())}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="sentiment-start-date">Start date</Label>
+            <Input
+              id="sentiment-start-date"
+              type="date"
+              value={startDate}
+              max={endDate}
+              onChange={(event) => setStartDate(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="sentiment-end-date">End date</Label>
+            <Input
+              id="sentiment-end-date"
+              type="date"
+              value={endDate}
+              min={startDate}
+              max={new Date().toISOString().slice(0, 10)}
+              onChange={(event) => setEndDate(event.target.value)}
+            />
+          </div>
+          <Button onClick={handleAnalyze} disabled={sentimentRequest.loading}>
+            <Search className="w-4 h-4 mr-2" />
+            {sentimentRequest.loading ? 'Loading...' : 'Analyze'}
           </Button>
         </div>
-        {error && (
-          <div className="mt-2 text-sm text-chart-3">
-            <AlertCircle className="w-4 h-4 inline mr-1" />
-            {error}
-          </div>
-        )}
       </div>
 
-      {data?.stock_info && (
-        <div className="bg-accent border border-border rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-sm text-muted-foreground">Analyzing: </span>
-              <span className="font-bold text-foreground">{data.stock_info.ticker}</span>
-            </div>
-            <div>
-              <span className="text-sm text-muted-foreground">Current Price: </span>
-              <span className="font-bold text-foreground">{data.stock_info.current_price}</span>
-            </div>
-          </div>
-        </div>
+      {(validationError || sentimentRequest.error) && (
+        <Alert variant="destructive">
+          <AlertDescription>{validationError || sentimentRequest.error?.message}</AlertDescription>
+        </Alert>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -184,8 +109,8 @@ export function SentimentAnalyzer() {
             <span className="text-sm text-muted-foreground">Positive</span>
             <TrendingUp className="w-5 h-5 text-chart-4" />
           </div>
-          <div className="text-2xl font-bold text-foreground">{sentimentCounts.positive}</div>
-          <div className="text-sm text-muted-foreground mt-1">Headlines</div>
+          <div className="text-2xl font-bold text-foreground">{analysis?.summary.positive ?? 0}</div>
+          <div className="text-sm text-muted-foreground mt-1">Last 7 days</div>
         </div>
 
         <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
@@ -193,8 +118,8 @@ export function SentimentAnalyzer() {
             <span className="text-sm text-muted-foreground">Neutral</span>
             <Minus className="w-5 h-5 text-muted-foreground" />
           </div>
-          <div className="text-2xl font-bold text-foreground">{sentimentCounts.neutral}</div>
-          <div className="text-sm text-muted-foreground mt-1">Headlines</div>
+          <div className="text-2xl font-bold text-foreground">{analysis?.summary.neutral ?? 0}</div>
+          <div className="text-sm text-muted-foreground mt-1">Last 7 days</div>
         </div>
 
         <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
@@ -202,8 +127,8 @@ export function SentimentAnalyzer() {
             <span className="text-sm text-muted-foreground">Negative</span>
             <TrendingDown className="w-5 h-5 text-chart-3" />
           </div>
-          <div className="text-2xl font-bold text-foreground">{sentimentCounts.negative}</div>
-          <div className="text-sm text-muted-foreground mt-1">Headlines</div>
+          <div className="text-2xl font-bold text-foreground">{analysis?.summary.negative ?? 0}</div>
+          <div className="text-sm text-muted-foreground mt-1">Last 7 days</div>
         </div>
 
         <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
@@ -211,89 +136,72 @@ export function SentimentAnalyzer() {
             <span className="text-sm text-muted-foreground">Avg Confidence</span>
             <MessageSquare className="w-5 h-5 text-primary" />
           </div>
-          <div className="text-2xl font-bold text-foreground">{avgConfidence}%</div>
+          <div className="text-2xl font-bold text-foreground">
+            {analysis ? `${(analysis.summary.average_confidence * 100).toFixed(0)}%` : '0%'}
+          </div>
           <div className="text-sm text-muted-foreground mt-1">All headlines</div>
         </div>
       </div>
 
       <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
         <h2 className="text-xl font-semibold text-foreground mb-4">Sentiment Trend</h2>
-        <SentimentTrendChart />
+        <SentimentTrendChart data={analysis?.trend ?? []} />
       </div>
 
       <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-foreground">
-            Recent Headlines {headlines.length > 0 && `(${headlines.length})`}
-          </h2>
-          {data?.stock_info && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => fetchSentiment(data.stock_info!.ticker)}
-              disabled={loading}
-            >
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          )}
-        </div>
-        
-        {loading ? (
-          <div className="text-center py-8 text-muted-foreground">
-            Loading headlines...
-          </div>
-        ) : headlines.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            No headlines found. Try searching for a ticker symbol.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {headlines.map((headline, idx) => {
-              const sentiment = headline.sentiment.toLowerCase();
-              const confidence = parseConfidence(headline.confidence);
-              
-              return (
-                <div key={idx} className="p-4 bg-accent rounded-lg">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-foreground mb-2">{headline.headline}</div>
-                      {(headline.source || headline.publishedAt) && (
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          {headline.source && <span>{headline.source}</span>}
-                          {headline.source && headline.publishedAt && <span>•</span>}
-                          {headline.publishedAt && <span>{formatDate(headline.publishedAt)}</span>}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        sentiment === 'positive' 
-                          ? 'bg-chart-4/10 text-chart-4 border border-chart-4/20'
-                          : sentiment === 'negative'
-                          ? 'bg-chart-3/10 text-chart-3 border border-chart-3/20'
-                          : 'bg-muted text-muted-foreground'
-                      }`}>
-                        {sentiment.charAt(0).toUpperCase() + sentiment.slice(1)}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-primary"
-                            style={{ width: `${Math.min(confidence, 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-xs text-muted-foreground w-10 text-right">
-                          {confidence.toFixed(0)}%
-                        </span>
-                      </div>
-                    </div>
+        <h2 className="text-xl font-semibold text-foreground mb-4">Recent Headlines</h2>
+        <div className="space-y-3">
+          {(analysis?.articles ?? []).map((headline) => (
+            <div key={headline.url || `${headline.published_at}-${headline.title}`} className="p-4 bg-accent rounded-lg">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <a
+                    href={headline.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-medium text-foreground mb-2 inline-flex items-start gap-2 hover:text-primary"
+                  >
+                    <span>{headline.title}</span>
+                    <ExternalLink className="w-4 h-4 mt-0.5 shrink-0" />
+                  </a>
+                  <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                    <span>{headline.source}</span>
+                    <span>•</span>
+                    <span>{new Date(headline.published_at).toLocaleString()}</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
+                <div className="flex flex-col items-end gap-2">
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    headline.sentiment === 'positive'
+                      ? 'bg-chart-4/10 text-chart-4 border border-chart-4/20'
+                      : headline.sentiment === 'negative'
+                      ? 'bg-chart-3/10 text-chart-3 border border-chart-3/20'
+                      : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {headline.sentiment.charAt(0).toUpperCase() + headline.sentiment.slice(1)}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary"
+                        style={{ width: `${headline.confidence * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-muted-foreground w-10 text-right">
+                      {(headline.confidence * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+          {analysis && analysis.articles.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">No headlines found for this period</div>
+          )}
+          {!analysis && (
+            <div className="text-center py-8 text-muted-foreground">No sentiment analysis yet</div>
+          )}
+        </div>
       </div>
     </div>
   );

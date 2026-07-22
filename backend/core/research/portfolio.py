@@ -41,8 +41,8 @@ def _flatten_ohlcv(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     out.index = pd.to_datetime(out.index).tz_localize(None)
     return out
 
-def _get_close_series(ticker: str, start: str) -> pd.Series:
-    df = yf.download(ticker, start=start, auto_adjust=True, progress=False)
+def _get_close_series(ticker: str, start: str, end: str | None = None) -> pd.Series:
+    df = yf.download(ticker, start=start, end=end, auto_adjust=True, progress=False)
     if df is None or df.empty:
         raise RuntimeError(f"No data for {ticker}")
     if isinstance(df.columns, pd.MultiIndex):
@@ -146,14 +146,19 @@ def _weights_mean_variance(returns: pd.DataFrame, lookback: int = 252, ridge: fl
     w = w / w.sum()
     return pd.Series(w, index=sub.columns, dtype="float")
 
-def _signal_series_for_ticker(ticker: str, start: str, signal_col: str) -> pd.DataFrame:
+def _signal_series_for_ticker(
+    ticker: str,
+    start: str,
+    signal_col: str,
+    end: str | None = None,
+) -> pd.DataFrame:
     """
     Returns a DataFrame with at least [signal_col, 'log_ret'] indexed by date.
     If signal_col starts with 'prob_up', we train walk-forward XGB to get predictions.
     Otherwise we compute alpha factors and pull the requested factor column.
     """
     # download OHLCV
-    px_raw = yf.download(ticker, start=start, auto_adjust=True, progress=False)
+    px_raw = yf.download(ticker, start=start, end=end, auto_adjust=True, progress=False)
     if px_raw is None or px_raw.empty:
         raise RuntimeError(f"No data for {ticker}")
     px = _flatten_ohlcv(px_raw, ticker)
@@ -163,8 +168,8 @@ def _signal_series_for_ticker(ticker: str, start: str, signal_col: str) -> pd.Da
         # derive horizon from name, e.g., prob_up_1d / prob_up_5d ...
         horizon = signal_col.replace("prob_up_", "")
         # also get SPY/VIX for cross-asset factors used in model
-        spy = _get_close_series("SPY", start)
-        vix = _get_close_series("^VIX", start)
+        spy = _get_close_series("SPY", start, end)
+        vix = _get_close_series("^VIX", start, end)
         res = run_walkforward_xgb(px, spy=spy, vix=vix, sector=None, horizon=horizon)
         sig = res.get("predictions", pd.DataFrame()).copy()
         if isinstance(sig, pd.DataFrame) and not sig.empty:
@@ -210,6 +215,7 @@ def backtest_portfolio(
     tickers: List[str],
     start: str,
     signal: str,
+    end: str | None = None,
     allocator: Literal["equal_weight", "risk_parity", "mean_variance", "signal_weighted", "quantile"] = "equal_weight",
     rebalance: Rebalance = "weekly",
     cost_bps: float = 5.0,
@@ -230,7 +236,7 @@ def backtest_portfolio(
     # --- gather per-ticker signal + log_ret ---
     frames = {}
     for t in tickers:
-        df = _signal_series_for_ticker(t, start=start, signal_col=signal)
+        df = _signal_series_for_ticker(t, start=start, signal_col=signal, end=end)
         frames[t] = df
 
     # aligned panel
@@ -250,21 +256,28 @@ def backtest_portfolio(
     rb_dates = _rebalance_dates(all_ix, rebalance)
     rb_set = set(rb_dates)
 
-    weights = pd.DataFrame(index=all_ix, columns=tickers, dtype="float")
-    prev_w = None
+    weights = pd.DataFrame(0.0, index=all_ix, columns=tickers, dtype="float")
+    current_weights = pd.Series(0.0, index=tickers, dtype="float")
     daily_pnl = pd.Series(index=all_ix, dtype="float")
+    turnover_series = pd.Series(0.0, index=all_ix, dtype="float")
+    transaction_costs = pd.Series(0.0, index=all_ix, dtype="float")
 
     # ----- for /api/report attribution -----
     asset_returns = ret_mat.copy()  # wide daily log returns by asset
 
     for dt in all_ix:
+        # Weights selected using today's close can only earn returns after today.
+        weights.loc[dt] = current_weights.values
+        r = ret_mat.loc[dt]
+        gross_return = float(np.nansum(current_weights.values * r.values))
+
         if dt in rb_set:
             srow = sig_mat.loc[dt]
             valid = srow.dropna()
             names = list(valid.index)
 
             if not names:
-                w_today = pd.Series(0.0, index=tickers, dtype="float")
+                next_weights = pd.Series(0.0, index=tickers, dtype="float")
             else:
                 if allocator == "equal_weight":
                     w_base = _weights_equal(names)
@@ -282,71 +295,34 @@ def backtest_portfolio(
                                                long_q=long_q or (n_quantiles or 5),
                                                short_q=short_q or 1)
 
-                w_today = pd.Series(0.0, index=tickers, dtype="float")
-                w_today.loc[w_base.index] = w_base.values
+                next_weights = pd.Series(0.0, index=tickers, dtype="float")
+                next_weights.loc[w_base.index] = w_base.values
 
-            # transaction cost via turnover on rebalance
-            if prev_w is not None:
-                turnover = float(np.nansum(np.abs(w_today.values - prev_w.values)))
-                tc = (cost_bps / 1e4) * turnover
-            else:
-                tc = 0.0
-            prev_w = w_today
-        else:
-            w_today = prev_w if prev_w is not None else pd.Series(0.0, index=tickers, dtype="float")
-            tc = 0.0
+            turnover = float(np.nansum(np.abs(next_weights.values - current_weights.values)))
+            cost = (cost_bps / 1e4) * turnover
+            turnover_series.loc[dt] = turnover
+            transaction_costs.loc[dt] = cost
+            current_weights = next_weights
 
-        weights.loc[dt] = w_today.values
-
-        # realize today's portfolio log return (weights from prev close applied to today's asset log returns)
-        r = ret_mat.loc[dt]
-        port_ret = float(np.nansum((w_today.values) * r.values))
-        port_ret_after_cost = port_ret - tc
-        daily_pnl.loc[dt] = port_ret_after_cost
+        daily_pnl.loc[dt] = gross_return - transaction_costs.loc[dt]
 
     daily_pnl = daily_pnl.replace([np.inf, -np.inf], np.nan).fillna(0.0)
     equity = daily_pnl.cumsum().apply(np.exp)
 
-    # ---- optional benchmark (for IR/β cards in /api/report) ----
+    # ---- optional benchmark (for IR/beta cards in /api/report) ----
     try:
-        bench_df = yf.download(
-            benchmark,
-            start=str(all_ix.min().date()),
-            interval="1d",
-            auto_adjust=True,
-            progress=False
-        )
-
-        if isinstance(bench_df, pd.DataFrame):
-            bp = bench_df["Adj Close"] if "Adj Close" in bench_df.columns else bench_df["Close"]
-            bp = pd.Series(bp).tz_localize(None)
-            bp = bp.reindex(all_ix).ffill()
-            bench_logret = np.log(bp / bp.shift(1))
-            bench_equity  = bench_logret.cumsum().apply(np.exp)
-        else:
-            bench_logret = pd.Series(0.0, index=all_ix, dtype=float)
-            bench_equity = pd.Series(1.0, index=all_ix, dtype=float)
+        benchmark_prices = _get_close_series(benchmark, start, end).reindex(all_ix).ffill()
+        benchmark_returns = np.log(benchmark_prices / benchmark_prices.shift(1)).fillna(0.0)
+        benchmark_equity = benchmark_returns.cumsum().apply(np.exp)
     except Exception:
-        bench_logret = pd.Series(0.0, index=all_ix, dtype=float)
-        bench_equity = pd.Series(1.0, index=all_ix, dtype=float)
+        benchmark_returns = pd.Series(0.0, index=all_ix, dtype="float")
+        benchmark_equity = pd.Series(1.0, index=all_ix, dtype="float")
 
-    bench_logret = bench_logret.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-    bench_equity = bench_equity.replace([np.inf, -np.inf], np.nan).fillna(method="ffill").fillna(1.0)
+    benchmark_returns = benchmark_returns.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+    benchmark_equity = benchmark_equity.replace([np.inf, -np.inf], np.nan).ffill().fillna(1.0)
 
     # /api/report expects "daily" as records with ret & bench_ret
-    try:
-        bench_px = yf.download(benchmark, start=start, interval="1d",
-                            auto_adjust=True, progress=False)["Adj Close"]
-        bench_px = pd.Series(bench_px).tz_localize(None)
-        bench_px = bench_px.reindex(all_ix).ffill()
-        bench_ret = np.log(bench_px / bench_px.shift(1)).fillna(0.0)   # log returns to match strategy
-        bench_equity = bench_ret.cumsum().apply(np.exp)
-    except Exception:
-        bench_ret = pd.Series(0.0, index=all_ix, dtype=float)
-        bench_equity = pd.Series(1.0, index=all_ix, dtype=float)
-
-    # /api/report expects "daily" as records with ret & bench_ret
-    daily_df = pd.DataFrame({"ret": daily_pnl, "bench_ret": bench_ret}).fillna(0.0)
+    daily_df = pd.DataFrame({"ret": daily_pnl, "bench_ret": benchmark_returns}).fillna(0.0)
 
     daily_records = [
         {
@@ -358,10 +334,15 @@ def backtest_portfolio(
     ]
 
     return {
-        "daily": daily_records,           # <— serialized records
+        "daily": daily_records,
+        "daily_returns": daily_pnl,
+        "benchmark_returns": benchmark_returns,
         "equity_curve": equity,
-        "bench_equity": bench_equity.to_dict(),   # <— dict for JSON
+        "bench_equity": benchmark_equity,
         "weights": weights,
+        "turnover": turnover_series,
+        "transaction_costs": transaction_costs,
+        "turnover_annual": float(turnover_series.mean() * 252.0),
         "asset_returns": asset_returns,
         "universe": tickers,
     }

@@ -1,14 +1,13 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-const data = [
-  { ticker: 'AAPL', contribution: 2.85 },
-  { ticker: 'NVDA', contribution: 3.42 },
-  { ticker: 'MSFT', contribution: 1.95 },
-  { ticker: 'META', contribution: 1.28 },
-  { ticker: 'GOOGL', contribution: -0.45 },
-];
+interface AttributionChartProps {
+  data?: Array<{ ticker: string; contribution: number }>;
+}
 
-export function AttributionChart() {
+export function AttributionChart({ data = [] }: AttributionChartProps) {
+  if (data.length === 0) {
+    return <div className="h-80 flex items-center justify-center text-muted-foreground">No attribution data available</div>;
+  }
   return (
     <div className="h-80">
       <ResponsiveContainer width="100%" height="100%">
@@ -22,7 +21,7 @@ export function AttributionChart() {
           <YAxis 
             tick={{ fontSize: 12 }}
             className="text-gray-600 dark:text-gray-400"
-            tickFormatter={(value) => `${value.toFixed(1)}%`}
+            tickFormatter={(value: number) => `${(value * 100).toFixed(1)}%`}
           />
           <Tooltip 
             contentStyle={{ 
@@ -31,7 +30,7 @@ export function AttributionChart() {
               borderRadius: '8px',
               color: '#fff'
             }}
-            formatter={(value: any) => [`${value.toFixed(2)}%`, 'Contribution']}
+            formatter={(value: number) => [`${(value * 100).toFixed(2)}%`, 'Contribution']}
           />
           <Bar dataKey="contribution" radius={[4, 4, 0, 0]}>
             {data.map((entry, index) => (

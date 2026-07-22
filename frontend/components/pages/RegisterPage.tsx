@@ -9,28 +9,43 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TrendingUp, Mail, Lock, User, AtSign, Loader2, Building2, Briefcase } from 'lucide-react'
 import { FaGoogle, FaGithub } from 'react-icons/fa'
+import { usePersistentState } from '@/hooks/usePersistentState'
+
+const EMPTY_REGISTRATION_DRAFT = {
+  email: '',
+  fullName: '',
+  username: '',
+  useCase: '',
+  companyName: '',
+  role: ''
+}
 
 export default function RegisterPage() {
   const navigate = useNavigate()
   const { signUp, signInWithGoogle, signInWithGithub } = useAuth()
   
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
-    fullName: '',
-    username: '',
-    useCase: '',
-    companyName: '',
-    role: ''
-  })
+  const [registrationDraft, setRegistrationDraft, clearRegistrationDraft] = usePersistentState(
+    'quantsight:v1:registration-draft',
+    EMPTY_REGISTRATION_DRAFT,
+  )
+  const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const formData = { ...registrationDraft, password, confirmPassword }
   
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }))
+    if (field === 'password') {
+      setPassword(value)
+      return
+    }
+    if (field === 'confirmPassword') {
+      setConfirmPassword(value)
+      return
+    }
+    setRegistrationDraft(previous => ({ ...previous, [field]: value }))
   }
 
   const validateForm = () => {
@@ -59,10 +74,9 @@ export default function RegisterPage() {
       return false
     }
 
-    // Validate username (alphanumeric and underscores only)
-    const usernameRegex = /^[a-zA-Z0-9_]+$/
+    const usernameRegex = /^[a-zA-Z0-9_]{3,30}$/
     if (!usernameRegex.test(formData.username)) {
-      setError('Username can only contain letters, numbers, and underscores')
+      setError('Username must be 3 to 30 letters, numbers, or underscores')
       return false
     }
 
@@ -76,7 +90,6 @@ export default function RegisterPage() {
     if (!validateForm()) return
 
     setLoading(true)
-    console.log('🔵 [RegisterPage] Form submission started')
 
     try {
       const metadata = {
@@ -89,44 +102,36 @@ export default function RegisterPage() {
         })
       }
 
-      console.log('🔵 [RegisterPage] Calling signUp with:', { email: formData.email, metadata })
       const { error } = await signUp(formData.email, formData.password, metadata)
       
-      console.log('🔵 [RegisterPage] signUp completed, error:', error)
-      
       if (error) {
-        console.error('🔴 [RegisterPage] Registration error:', error)
         if (error.message.includes('already registered')) {
           setError('This email is already registered. Please sign in instead.')
         } else {
           setError(error.message)
         }
       } else {
-        console.log('🟢 [RegisterPage] Registration successful!')
+        clearRegistrationDraft()
+        setPassword('')
+        setConfirmPassword('')
         setSuccess(true)
       }
-    } catch (err) {
-      console.error('🔴 [RegisterPage] Registration exception:', err)
+    } catch {
       setError('An unexpected error occurred. Please try again.')
     } finally {
       setLoading(false)
-      console.log('🔵 [RegisterPage] Form submission completed')
     }
   }
 
   const handleGoogleSignIn = async () => {
-    console.log('🔵 [RegisterPage] Google sign-in clicked')
     setError('')
     setLoading(true)
     try {
       const { error } = await signInWithGoogle()
-      console.log('🔵 [RegisterPage] Google sign-in result:', { error })
       if (error) {
-        console.error('🔴 [RegisterPage] Google sign-in error:', error)
         setError(error.message)
       }
-    } catch (err) {
-      console.error('🔴 [RegisterPage] Google sign-in exception:', err)
+    } catch {
       setError('Failed to sign in with Google')
     } finally {
       setLoading(false)
@@ -134,18 +139,14 @@ export default function RegisterPage() {
   }
 
   const handleGithubSignIn = async () => {
-    console.log('🔵 [RegisterPage] GitHub sign-in clicked')
     setError('')
     setLoading(true)
     try {
       const { error } = await signInWithGithub()
-      console.log('🔵 [RegisterPage] GitHub sign-in result:', { error })
       if (error) {
-        console.error('🔴 [RegisterPage] GitHub sign-in error:', error)
         setError(error.message)
       }
-    } catch (err) {
-      console.error('🔴 [RegisterPage] GitHub sign-in exception:', err)
+    } catch {
       setError('Failed to sign in with GitHub')
     } finally {
       setLoading(false)

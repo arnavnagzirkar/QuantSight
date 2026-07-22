@@ -1,28 +1,19 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-// Generate mock sentiment trend data
-const generateSentimentData = () => {
-  const data = [];
-  const startDate = new Date('2024-11-01');
-  
-  for (let i = 0; i < 21; i++) {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + i);
-    
-    data.push({
-      date: date.toISOString().split('T')[0],
-      positive: Math.floor(Math.random() * 20 + 30),
-      neutral: Math.floor(Math.random() * 15 + 20),
-      negative: Math.floor(Math.random() * 15 + 10),
-    });
+interface SentimentTrendChartProps {
+  data: Array<{
+    date: string;
+    positive: number;
+    neutral: number;
+    negative: number;
+  }>;
+}
+
+export function SentimentTrendChart({ data }: SentimentTrendChartProps) {
+  if (data.length === 0) {
+    return <div className="h-80 flex items-center justify-center text-muted-foreground">No sentiment trend available</div>;
   }
-  
-  return data;
-};
 
-const data = generateSentimentData();
-
-export function SentimentTrendChart() {
   return (
     <div className="h-80">
       <ResponsiveContainer width="100%" height="100%">
@@ -32,8 +23,8 @@ export function SentimentTrendChart() {
             dataKey="date" 
             tick={{ fontSize: 12 }}
             className="text-gray-600 dark:text-gray-400"
-            tickFormatter={(value) => {
-              const date = new Date(value);
+            tickFormatter={(value: string) => {
+              const date = new Date(`${value}T00:00:00`);
               return `${date.getMonth() + 1}/${date.getDate()}`;
             }}
           />

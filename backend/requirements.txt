@@ -1,8 +1,8 @@
 flask
 flask-cors
+gunicorn>=23,<24
 requests
 yfinance
-transformers
 torch
 pandas
 pandas-datareader
@@ -13,6 +13,11 @@ scikit-learn
 statsmodels
 xgboost
 pydantic
+PyJWT[crypto]>=2.10,<3
+supabase>=2.5,<3
+redis>=5,<7
+rq>=2,<3
+pytest>=8,<9
 plotly
 matplotlib
 click

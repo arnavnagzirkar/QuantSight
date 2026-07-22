@@ -1,31 +1,34 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider } from './components/ThemeProvider';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Layout } from './components/Layout';
 import { Toaster } from './components/ui/sonner';
-import LandingPage from './components/pages/LandingPage';
-import LoginPage from './components/pages/LoginPage';
-import RegisterPage from './components/pages/RegisterPage';
-import AuthCallback from './components/pages/AuthCallback';
-import { Dashboard } from './components/pages/Dashboard';
-import { TickerIntelligence } from './components/pages/TickerIntelligence';
-import { FactorExplorer } from './components/pages/FactorExplorer';
-import { ModelLab } from './components/pages/ModelLab';
-import { ExperimentManager } from './components/pages/ExperimentManager';
-import { SignalDiagnostics } from './components/pages/SignalDiagnostics';
-import { StrategyBacktest } from './components/pages/StrategyBacktest';
-import { PortfolioLab } from './components/pages/PortfolioLab';
-import { RiskPerformance } from './components/pages/RiskPerformance';
-import { SentimentAnalyzer } from './components/pages/SentimentAnalyzer';
-import { Settings } from './components/pages/Settings';
+
+const LandingPage = lazy(() => import('./components/pages/LandingPage'));
+const LoginPage = lazy(() => import('./components/pages/LoginPage'));
+const RegisterPage = lazy(() => import('./components/pages/RegisterPage'));
+const AuthCallback = lazy(() => import('./components/pages/AuthCallback'));
+const Dashboard = lazy(() => import('./components/pages/Dashboard').then(module => ({ default: module.Dashboard })));
+const TickerIntelligence = lazy(() => import('./components/pages/TickerIntelligence').then(module => ({ default: module.TickerIntelligence })));
+const FactorExplorer = lazy(() => import('./components/pages/FactorExplorer').then(module => ({ default: module.FactorExplorer })));
+const ModelLab = lazy(() => import('./components/pages/ModelLab').then(module => ({ default: module.ModelLab })));
+const ExperimentManager = lazy(() => import('./components/pages/ExperimentManager').then(module => ({ default: module.ExperimentManager })));
+const SignalDiagnostics = lazy(() => import('./components/pages/SignalDiagnostics').then(module => ({ default: module.SignalDiagnostics })));
+const StrategyBacktest = lazy(() => import('./components/pages/StrategyBacktest').then(module => ({ default: module.StrategyBacktest })));
+const PortfolioLab = lazy(() => import('./components/pages/PortfolioLab').then(module => ({ default: module.PortfolioLab })));
+const RiskPerformance = lazy(() => import('./components/pages/RiskPerformance').then(module => ({ default: module.RiskPerformance })));
+const SentimentAnalyzer = lazy(() => import('./components/pages/SentimentAnalyzer').then(module => ({ default: module.SentimentAnalyzer })));
+const Settings = lazy(() => import('./components/pages/Settings').then(module => ({ default: module.Settings })));
 
 export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <Router>
-          <Routes>
+        <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+          <Suspense fallback={<PageLoading />}>
+            <Routes>
             {/* Public routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
@@ -110,10 +113,19 @@ export default function App() {
                 </Layout>
               </ProtectedRoute>
             } />
-          </Routes>
+            </Routes>
+          </Suspense>
           <Toaster position="top-right" />
         </Router>
       </AuthProvider>
     </ThemeProvider>
+  );
+}
+
+function PageLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground">
+      Loading...
+    </div>
   );
 }

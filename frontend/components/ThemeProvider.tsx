@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light' | 'system';
 
@@ -20,6 +20,17 @@ const initialState: ThemeProviderState = {
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState);
 
+function storedTheme(storageKey: string, fallback: Theme) {
+  try {
+    const value = localStorage.getItem(storageKey);
+    return value && ['light', 'dark', 'system'].includes(value)
+      ? value as Theme
+      : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = 'dark',
@@ -27,14 +38,11 @@ export function ThemeProvider({
   ...props
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
+    () => storedTheme(storageKey, defaultTheme)
   );
 
   useEffect(() => {
     const root = window.document.documentElement;
-
-    console.log('🎨 Theme changed to:', theme);
-    console.log('📋 Current classes before:', root.classList.toString());
 
     root.classList.remove('light', 'dark');
 
@@ -44,26 +52,36 @@ export function ThemeProvider({
         ? 'dark'
         : 'light';
 
-      console.log('🖥️ System theme detected:', systemTheme);
       root.classList.add(systemTheme);
-      console.log('✅ Applied system theme:', systemTheme);
-      console.log('📋 Current classes after:', root.classList.toString());
       return;
     }
 
     root.classList.add(theme);
-    console.log('✅ Applied theme:', theme);
-    console.log('📋 Current classes after:', root.classList.toString());
   }, [theme]);
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== storageKey || !event.newValue) return;
+      if (['light', 'dark', 'system'].includes(event.newValue)) {
+        setTheme(event.newValue as Theme);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [storageKey]);
+
+  const updateTheme = useCallback((newTheme: Theme) => {
+    try {
+      localStorage.setItem(storageKey, newTheme);
+    } catch {
+      // Theme state still updates when browser storage is unavailable.
+    }
+    setTheme(newTheme);
+  }, [storageKey]);
 
   const value = {
     theme,
-    setTheme: (newTheme: Theme) => {
-      console.log('🔄 setTheme called with:', newTheme);
-      localStorage.setItem(storageKey, newTheme);
-      console.log('💾 Saved to localStorage:', storageKey, '=', newTheme);
-      setTheme(newTheme);
-    },
+    setTheme: updateTheme,
   };
 
   return (

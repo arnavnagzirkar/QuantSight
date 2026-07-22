@@ -1,276 +1,201 @@
-// API Service for QuantSight Research Lab
-// Connect to Flask backend - maps React frontend to existing Flask endpoints
+import type {
+  APIEnvelope,
+  DashboardData,
+  ExperimentComparison,
+  ExperimentRecord,
+  ExperimentRequest,
+  FactorAnalysis,
+  FactorComputeParams,
+  JobRecord,
+  ModelTrainingRequest,
+  PasswordSession,
+  PortfolioRunRequest,
+  SentimentAnalysis,
+  SignalAnalysisRequest,
+  StrategyBacktestRequest,
+  TickerAnalysis,
+  UserSettings,
+  UsernameAvailability,
+} from '../types/api';
+import { supabase } from './supabase';
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || '';
+const configuredAPIBaseURL = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '') || '';
+const API_BASE_URL = configuredAPIBaseURL
+  ? configuredAPIBaseURL.endsWith('/api') ? configuredAPIBaseURL : `${configuredAPIBaseURL}/api`
+  : '/api';
+const inFlightGetRequests = new Map<string, Promise<unknown>>();
 
-// Generic fetch wrapper with error handling
-async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`;
-  
-  const defaultHeaders = {
-    'Content-Type': 'application/json',
-  };
+export class APIRequestError extends Error {
+  status: number;
+  code?: string;
+  details?: unknown;
 
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...options.headers,
-      },
-    });
-
-    const text = await response.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error(`Server returned non-JSON: ${text.slice(0, 200)}`);
-    }
-
-    if (!response.ok || data.error) {
-      throw new Error(data.error || `API Error: ${response.status} ${response.statusText}`);
-    }
-
-    return data;
-  } catch (error) {
-    console.error('API Request failed:', error);
-    throw error;
+  constructor(message: string, status: number, code?: string, details?: unknown) {
+    super(message);
+    this.name = 'APIRequestError';
+    this.status = status;
+    this.code = code;
+    this.details = details;
   }
 }
 
-// Dashboard API
+async function requestWithToken(url: string, options: RequestInit, accessToken?: string) {
+  return fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      ...options.headers,
+    },
+  });
+}
+
+async function performFetchAPI<T>(endpoint: string, options: RequestInit): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const { data: sessionData } = await supabase.auth.getSession();
+  let response = await requestWithToken(url, options, sessionData.session?.access_token);
+
+  if (response.status === 401 && sessionData.session) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    if (refreshed.session?.access_token) {
+      response = await requestWithToken(url, options, refreshed.session.access_token);
+    }
+  }
+
+  if (response.status === 204) return undefined as T;
+  const text = await response.text();
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new APIRequestError(
+      response.ok ? 'Server returned an invalid response' : `Request failed with status ${response.status}`,
+      response.status,
+    );
+  }
+  if (!response.ok || data.error) {
+    const errorPayload = data.error;
+    const message = typeof errorPayload === 'string'
+      ? errorPayload
+      : errorPayload?.message || `API Error: ${response.status} ${response.statusText}`;
+    throw new APIRequestError(message, response.status, errorPayload?.code, errorPayload?.details);
+  }
+  return data as T;
+}
+
+async function fetchAPI<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const method = (options.method ?? 'GET').toUpperCase();
+  if (method !== 'GET') return performFetchAPI<T>(endpoint, options);
+
+  const requestKey = `${API_BASE_URL}${endpoint}`;
+  const existing = inFlightGetRequests.get(requestKey);
+  if (existing) return existing as Promise<T>;
+
+  const request = performFetchAPI<T>(endpoint, options)
+    .finally(() => inFlightGetRequests.delete(requestKey));
+  inFlightGetRequests.set(requestKey, request);
+  return request;
+}
+
+function idempotencyHeaders(idempotencyKey?: string) {
+  return idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined;
+}
+
+export const authAPI = {
+  passwordSignIn: (identifier: string, password: string) =>
+    fetchAPI<APIEnvelope<PasswordSession>>('/auth/password-sign-in', {
+      method: 'POST',
+      body: JSON.stringify({ identifier, password }),
+    }),
+  getUsernameAvailability: (username: string) =>
+    fetchAPI<APIEnvelope<UsernameAvailability>>(`/auth/username-availability?username=${encodeURIComponent(username)}`),
+};
+
 export const dashboardAPI = {
-  getOverview: () => fetchAPI('/dashboard/overview'),
-  getEquityCurve: (params?: { startDate?: string; endDate?: string }) => 
-    fetchAPI(`/dashboard/equity-curve${params ? `?${new URLSearchParams(params as any).toString()}` : ''}`),
-  getRecentSignals: (limit?: number) => fetchAPI(`/dashboard/signals${limit ? `?limit=${limit}` : ''}`),
-  getTopHoldings: () => fetchAPI('/dashboard/holdings'),
+  getDashboard: () => fetchAPI<APIEnvelope<DashboardData>>('/dashboard'),
 };
 
-// Ticker Intelligence API
 export const tickerAPI = {
-  getTickerData: (ticker: string) => fetchAPI(`/tickers/${ticker}`),
-  getTickerHistory: (ticker: string, params?: { startDate?: string; endDate?: string }) =>
-    fetchAPI(`/tickers/${ticker}/history${params ? `?${new URLSearchParams(params as any).toString()}` : ''}`),
-  getTickerMetrics: (ticker: string) => fetchAPI(`/tickers/${ticker}/metrics`),
-  searchTickers: (query: string) => fetchAPI(`/tickers/search?q=${encodeURIComponent(query)}`),
+  getTickerData: (ticker: string, params?: { start_date?: string; end_date?: string }) =>
+    fetchAPI<APIEnvelope<TickerAnalysis>>(
+      `/tickers/${encodeURIComponent(ticker)}${params ? `?${new URLSearchParams(params).toString()}` : ''}`,
+    ),
 };
 
-// Factor Explorer API
 export const factorAPI = {
-  getFactors: () => fetchAPI('/factors'),
-  computeFactors: (params: { tickers: string[]; factors: string[]; startDate?: string; endDate?: string }) =>
-    fetchAPI('/factors/compute', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }),
-  getFactorAnalysis: (factorName: string) => fetchAPI(`/factors/${factorName}/analysis`),
-  getPCAAnalysis: (params: { factors: string[] }) =>
-    fetchAPI('/factors/pca', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }),
-  getCorrelation: (params: { factors: string[] }) =>
-    fetchAPI('/factors/correlation', {
+  computeFactors: (params: FactorComputeParams) =>
+    fetchAPI<APIEnvelope<FactorAnalysis>>('/factors/compute', {
       method: 'POST',
       body: JSON.stringify(params),
     }),
 };
 
-// Model Lab API
 export const modelAPI = {
-  getModels: () => fetchAPI('/models'),
-  trainModel: (params: {
-    name: string;
-    factors: string[];
-    tickers: string[];
-    target: string;
-    params: Record<string, any>;
-    walkForwardParams?: {
-      trainDays: number;
-      testDays: number;
-      retrainFrequency: number;
-    };
-  }) => fetchAPI('/models/train', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  }),
-  getModelDetails: (modelId: string) => fetchAPI(`/models/${modelId}`),
-  getFeatureImportance: (modelId: string) => fetchAPI(`/models/${modelId}/feature-importance`),
-  predictModel: (modelId: string, data: any) =>
-    fetchAPI(`/models/${modelId}/predict`, {
+  trainModel: (params: ModelTrainingRequest, idempotencyKey?: string) =>
+    fetchAPI<APIEnvelope<JobRecord>>('/models/train', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(params),
+      headers: idempotencyHeaders(idempotencyKey),
     }),
-  deleteModel: (modelId: string) =>
-    fetchAPI(`/models/${modelId}`, { method: 'DELETE' }),
 };
 
-// Experiment Manager API
 export const experimentAPI = {
-  getExperiments: () => fetchAPI('/experiments'),
-  createExperiment: (params: {
-    name: string;
-    description?: string;
-    config: Record<string, any>;
-  }) => fetchAPI('/experiments', {
-    method: 'POST',
-    body: JSON.stringify(params),
+  getExperiments: () => fetchAPI<APIEnvelope<ExperimentRecord[]>>('/experiments'),
+  createExperiment: (params: ExperimentRequest) => fetchAPI<APIEnvelope<ExperimentRecord>>('/experiments', {
+    method: 'POST', body: JSON.stringify(params),
   }),
-  getExperimentDetails: (experimentId: string) => fetchAPI(`/experiments/${experimentId}`),
-  updateExperiment: (experimentId: string, params: any) =>
-    fetchAPI(`/experiments/${experimentId}`, {
-      method: 'PUT',
-      body: JSON.stringify(params),
-    }),
-  deleteExperiment: (experimentId: string) =>
-    fetchAPI(`/experiments/${experimentId}`, { method: 'DELETE' }),
-  runExperiment: (experimentId: string) =>
-    fetchAPI(`/experiments/${experimentId}/run`, { method: 'POST' }),
-  compareExperiments: (experimentIds: string[]) =>
-    fetchAPI('/experiments/compare', {
-      method: 'POST',
-      body: JSON.stringify({ experimentIds }),
-    }),
+  getExperimentDetails: (experimentId: string) => fetchAPI<APIEnvelope<ExperimentRecord>>(`/experiments/${experimentId}`),
+  updateExperiment: (experimentId: string, params: ExperimentRequest) => fetchAPI<APIEnvelope<ExperimentRecord>>(`/experiments/${experimentId}`, {
+    method: 'PUT', body: JSON.stringify(params),
+  }),
+  deleteExperiment: (experimentId: string) => fetchAPI<void>(`/experiments/${experimentId}`, { method: 'DELETE' }),
+  runExperiment: (experimentId: string, idempotencyKey?: string) => fetchAPI<APIEnvelope<JobRecord>>(`/experiments/${experimentId}/runs`, {
+    method: 'POST', headers: idempotencyHeaders(idempotencyKey),
+  }),
+  compareRuns: (jobIds: string[]) => fetchAPI<APIEnvelope<ExperimentComparison[]>>('/experiment-runs/compare', {
+    method: 'POST', body: JSON.stringify({ job_ids: jobIds }),
+  }),
 };
 
-// Signal Diagnostics API
+export const jobAPI = {
+  listJobs: (limit = 50) => fetchAPI<APIEnvelope<JobRecord[]>>(`/jobs?limit=${limit}`),
+  getJob: (jobId: string) => fetchAPI<APIEnvelope<JobRecord>>(`/jobs/${jobId}`),
+  cancelJob: (jobId: string) => fetchAPI<APIEnvelope<JobRecord>>(`/jobs/${jobId}/cancel`, { method: 'POST' }),
+};
+
 export const signalAPI = {
-  getSignals: (params?: { startDate?: string; endDate?: string; ticker?: string }) =>
-    fetchAPI(`/signals${params ? `?${new URLSearchParams(params as any).toString()}` : ''}`),
-  getSignalDecay: (params: { signalType: string; horizons: number[] }) =>
-    fetchAPI('/signals/decay', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }),
-  getQuantileReturns: (params: { signalType: string; quantiles: number }) =>
-    fetchAPI('/signals/quantile-returns', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }),
-  getSignalStats: (signalType: string) => fetchAPI(`/signals/${signalType}/stats`),
+  createAnalysis: (params: SignalAnalysisRequest, idempotencyKey?: string) => fetchAPI<APIEnvelope<JobRecord>>('/signal-analyses', {
+    method: 'POST', body: JSON.stringify(params), headers: idempotencyHeaders(idempotencyKey),
+  }),
 };
 
-// Strategy Backtest API
 export const backtestAPI = {
-  runBacktest: (params: {
-    strategy: string;
-    tickers: string[];
-    startDate: string;
-    endDate: string;
-    initialCapital?: number;
-    config?: Record<string, any>;
-  }) => fetchAPI('/backtest/run', {
-    method: 'POST',
-    body: JSON.stringify(params),
+  createBacktest: (params: StrategyBacktestRequest, idempotencyKey?: string) => fetchAPI<APIEnvelope<JobRecord>>('/backtests', {
+    method: 'POST', body: JSON.stringify(params), headers: idempotencyHeaders(idempotencyKey),
   }),
-  getBacktestResults: (backtestId: string) => fetchAPI(`/backtest/${backtestId}`),
-  getBacktestHistory: () => fetchAPI('/backtest/history'),
-  compareBacktests: (backtestIds: string[]) =>
-    fetchAPI('/backtest/compare', {
-      method: 'POST',
-      body: JSON.stringify({ backtestIds }),
-    }),
 };
 
-// Portfolio Lab API
 export const portfolioAPI = {
-  optimizePortfolio: (params: {
-    tickers: string[];
-    method: string; // 'mean-variance', 'risk-parity', 'black-litterman', 'hrp'
-    constraints?: Record<string, any>;
-    targetReturn?: number;
-    targetRisk?: number;
-  }) => fetchAPI('/portfolio/optimize', {
-    method: 'POST',
-    body: JSON.stringify(params),
+  createPortfolioRun: (params: PortfolioRunRequest, idempotencyKey?: string) => fetchAPI<APIEnvelope<JobRecord>>('/portfolio-runs', {
+    method: 'POST', body: JSON.stringify(params), headers: idempotencyHeaders(idempotencyKey),
   }),
-  getPortfolioAnalytics: (portfolioId: string) => fetchAPI(`/portfolio/${portfolioId}/analytics`),
-  getPortfolios: () => fetchAPI('/portfolio'),
-  rebalancePortfolio: (portfolioId: string, params: any) =>
-    fetchAPI(`/portfolio/${portfolioId}/rebalance`, {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }),
 };
 
-// Risk & Performance API
-export const riskAPI = {
-  getRiskMetrics: (portfolioId?: string) =>
-    fetchAPI(`/risk/metrics${portfolioId ? `?portfolioId=${portfolioId}` : ''}`),
-  getVaR: (params: { portfolioId: string; confidence: number; horizon: number }) =>
-    fetchAPI('/risk/var', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }),
-  getStressTest: (params: { portfolioId: string; scenarios: string[] }) =>
-    fetchAPI('/risk/stress-test', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }),
-  getAttribution: (portfolioId: string, params?: { startDate?: string; endDate?: string }) =>
-    fetchAPI(`/risk/attribution/${portfolioId}${params ? `?${new URLSearchParams(params as any).toString()}` : ''}`),
-  getDrawdownAnalysis: (portfolioId: string) => fetchAPI(`/risk/drawdown/${portfolioId}`),
-};
-
-// Sentiment Analyzer API
 export const sentimentAPI = {
-  analyzeSentiment: (params: { tickers: string[]; startDate?: string; endDate?: string }) =>
-    fetchAPI('/sentiment/analyze', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }),
-  getHeadlines: (params?: { ticker?: string; startDate?: string; endDate?: string; limit?: number }) =>
-    fetchAPI(`/sentiment/headlines${params ? `?${new URLSearchParams(params as any).toString()}` : ''}`),
-  getSentimentTrends: (ticker: string, params?: { startDate?: string; endDate?: string }) =>
-    fetchAPI(`/sentiment/trends/${ticker}${params ? `?${new URLSearchParams(params as any).toString()}` : ''}`),
-  classifyHeadlines: (headlines: string[]) =>
-    fetchAPI('/sentiment/classify', {
-      method: 'POST',
-      body: JSON.stringify({ headlines }),
-    }),
+  getTickerSentiment: (ticker: string, params?: { start_date?: string; end_date?: string; limit?: number }) => {
+    const query = params
+      ? new URLSearchParams(Object.entries(params).reduce<Record<string, string>>((result, [key, value]) => {
+          if (value !== undefined) result[key] = String(value);
+          return result;
+        }, {})).toString()
+      : '';
+    return fetchAPI<APIEnvelope<SentimentAnalysis>>(`/sentiment/${encodeURIComponent(ticker)}${query ? `?${query}` : ''}`);
+  },
 };
 
-// Data Monitor API
-export const dataAPI = {
-  getDataStatus: () => fetchAPI('/data/status'),
-  getDataQuality: (source?: string) =>
-    fetchAPI(`/data/quality${source ? `?source=${source}` : ''}`),
-  refreshData: (params: { sources: string[] }) =>
-    fetchAPI('/data/refresh', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }),
-  getDataSources: () => fetchAPI('/data/sources'),
-};
-
-// Settings API
 export const settingsAPI = {
-  getSettings: () => fetchAPI('/settings'),
-  updateSettings: (settings: Record<string, any>) =>
-    fetchAPI('/settings', {
-      method: 'PUT',
-      body: JSON.stringify(settings),
-    }),
-  testConnection: (params: { type: string; config: Record<string, any> }) =>
-    fetchAPI('/settings/test-connection', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    }),
-};
-
-export default {
-  dashboard: dashboardAPI,
-  ticker: tickerAPI,
-  factor: factorAPI,
-  model: modelAPI,
-  experiment: experimentAPI,
-  signal: signalAPI,
-  backtest: backtestAPI,
-  portfolio: portfolioAPI,
-  risk: riskAPI,
-  sentiment: sentimentAPI,
-  data: dataAPI,
-  settings: settingsAPI,
+  getSettings: () => fetchAPI<APIEnvelope<UserSettings>>('/settings'),
+  updateSettings: (settings: UserSettings) => fetchAPI<APIEnvelope<UserSettings>>('/settings', {
+    method: 'PUT', body: JSON.stringify(settings),
+  }),
 };

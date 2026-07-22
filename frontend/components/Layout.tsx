@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useState } from 'react';
 import { Moon, Sun, Menu, ChevronLeft } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
+import { useUserPersistentState } from '../hooks/usePersistentState';
 
 function cn(...classes: Array<string | false | null | undefined>) {
   return classes.filter(Boolean).join(' ');
@@ -37,12 +37,11 @@ const navigation = [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useUserPersistentState('layout:sidebar-collapsed', false);
   const { theme, setTheme } = useTheme();
 
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
-    console.log('🔘 Toggle button clicked - Current theme:', theme, '→ New theme:', newTheme);
     setTheme(newTheme);
   };
 

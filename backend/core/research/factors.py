@@ -224,9 +224,15 @@ def compute_alpha_factors(
     df["target_ret_10d"]  = np.log(df[pcol].shift(-10)  / df[pcol])
     df["target_ret_20d"]  = np.log(df[pcol].shift(-20)  / df[pcol])
 
-    df["y_up_1d"]  = (df["target_ret_1d"]  > 0).astype(int)
-    df["y_up_5d"]  = (df["target_ret_5d"]  > 0).astype(int)
-    df["y_up_20d"] = (df["target_ret_20d"] > 0).astype(int)
+    df["y_up_1d"] = (
+        (df["target_ret_1d"] > 0).astype(float).where(df["target_ret_1d"].notna())
+    )
+    df["y_up_5d"] = (
+        (df["target_ret_5d"] > 0).astype(float).where(df["target_ret_5d"].notna())
+    )
+    df["y_up_20d"] = (
+        (df["target_ret_20d"] > 0).astype(float).where(df["target_ret_20d"].notna())
+    )
     return df
 
 # ---------------------------
